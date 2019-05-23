@@ -1,0 +1,1385 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<modification>
+    <name>Collivery.net Extension v3.0.3.1</name>
+    <code>mds</code>
+    <version>1</version>
+    <author>MDS Tech</author>
+    <link>http://www.collivery.co.za</link>
+    <!-- CONTROLLERS -->
+    <!-- Admin Controllers -->
+    <file path="catalog/model/checkout/order.php">
+        <operation>
+            <search>
+                <![CDATA[public function addOrder($data) {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+        /** @collivery-data */
+        $default_address =  $this->collivery->getDefaultAddress();
+        $sql_data['collivery_from_address_id'] = $default_address['address']['address_id'];
+        $sql_data['collivery_from_contact_id'] = current($default_address['contacts'])['contact_id'];
+
+        if(isset($data['shipping_collivery_location_type'], $data['shipping_collivery_town'], $data['shipping_collivery_suburb'])){
+            $sql_data['collivery_location_type'] = $data['shipping_collivery_location_type'];
+            $sql_data['collivery_town'] = $data['shipping_collivery_town'];
+            $sql_data['collivery_suburb'] = $data['shipping_collivery_suburb'];
+        }
+        $extra_sql = '';
+        foreach($sql_data as $column => $value){
+            $extra_sql .= $column ."='" . $value . "',";
+        }
+        /** @endcollivery-data */
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA["INSERT INTO `" . DB_PREFIX . "order` SET]]>
+            </search>
+            <add position="replace">
+                <![CDATA["INSERT INTO `" . DB_PREFIX . "order` SET {$extra_sql}]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/confirm.php">
+        <operation>
+            <search>
+                <![CDATA[$this->load->model('account/customer');]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    $this->load->model('account/customer');
+                    $this->load->model('account/address');
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[$order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    $order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];
+				$order_data['shipping_collivery_town'] = $this->session->data['shipping_address']['collivery_town'];
+				$order_data['shipping_collivery_suburb'] = $this->session->data['shipping_address']['collivery_suburb'];
+				$order_data['shipping_collivery_location_type'] = $this->session->data['shipping_address']['collivery_location_type'];
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/model/setting/event.php">
+        <operation>
+            <search>
+                <![CDATA[class ModelSettingEvent extends Model {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+protected  $collivery_fields = array(
+    'order' => array(
+        'collivery_from_address_id',
+        'collivery_from_contact_id',
+        'collivery_to_address_id',
+        'collivery_to_contact_id',
+        'collivery_town',
+        'collivery_suburb',
+        'collivery_location_type',
+        'collivery_price_data',
+        'collivery_service_type_id',
+        'collivery_service_type_id',
+        'waybill_id'
+    ),
+    'address' => array(
+        'collivery_town',
+        'collivery_suburb',
+        'collivery_location_type',
+    )
+);
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[public function deleteEvent(]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+    public function installColliveryShippingPlugin(){
+
+        $collivery_dir = DIR_SYSTEM . 'library/mds/';
+        if(is_dir($collivery_dir)){
+            $this->addFieldsInTables();
+            $this->addCustomFields();
+        }
+
+    }
+    public function uninstallColliveryShippingPlugin(){
+        $this->addFieldsInTables(false);
+        $this->addCustomFields(false);
+    }
+    public function addFieldsInTables($add = true){
+        if($add === true){
+            foreach ($this->collivery_fields as $table => $fields){
+                foreach($fields as $field){
+                    $sql = "IF NOT EXISTS( SELECT NULL
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE table_name = '" . DB_PREFIX. "{$table}'
+                     AND table_schema = '" . DB_DATABASE . "'
+                     AND column_name = '{$field}')  THEN
+                   ALTER TABLE `" . DB_PREFIX. "{$table}` ADD `{$field}` TEXT NULL DEFAULT NULL;
+                END IF;";
+                    $this->db->query($sql);
+                }
+            }
+        }elseif($add === false){
+            foreach ($this->collivery_fields as $table => $fields){
+                foreach($fields as $field){
+                    $sql = "IF EXISTS( SELECT NULL
+                    FROM INFORMATION_SCHEMA.COLUMNS
+                   WHERE table_name = '" . DB_PREFIX. "{$table}'
+                     AND table_schema = '" . DB_DATABASE . "'
+                     AND column_name = '{$field}')  THEN
+                   ALTER TABLE " . DB_PREFIX . "{$table} DROP COLUMN {$field};
+                   END IF;";
+                    $this->db->query($sql);
+                }
+
+            }
+            $dir = DIR_SYSTEM . 'library/mds/';
+            /**
+            if(is_dir($dir)){
+            $it = new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS);
+            $files = new RecursiveIteratorIterator($it, RecursiveIteratorIterator::CHILD_FIRST);
+            foreach($files as $file) {
+            if ($file->isDir()){
+            rmdir($file->getRealPath());
+            } else {
+            unlink($file->getRealPath());
+            }
+            }
+            rmdir($dir);
+            }
+            $this->deleteEventByCode('mds');
+
+             */
+        }
+
+    }
+    public function addCustomFields($add = true) {
+        $fields = array ( "10" => "Location Type", "8" => "Town", "9" => "Suburb" );
+        $relationship = array('custom_field_description', 'custom_field_customer_group', 'custom_field_value_description', 'custom_field_value', 'custom_field');
+
+	    if($add === true){
+            foreach ($fields as $key => $field) {
+                $customField = $this->db->query('SELECT * FROM `'. DB_PREFIX .'custom_field_description` where name ="' . $field . '"');
+                if($customField->num_rows == 0) {
+                    $this->db->query("INSERT INTO `" . DB_PREFIX . "custom_field` SET type = \"select\", location = \"address\", status = 1, sort_order = '" . (int)$key . "'");
+                    $custom_field_id = $this->db->getLastId();
+                    $this->db->query("INSERT INTO " . DB_PREFIX . "custom_field_description SET custom_field_id = '" . (int)$custom_field_id . "', language_id = 1, name = '" . $this->db->escape($field) . "'");
+                    $this->db->query("INSERT INTO " . DB_PREFIX . "custom_field_customer_group SET custom_field_id = '" . (int)$custom_field_id . "', customer_group_id = 1, required = 0");
+                }
+            }
+        }else{
+            foreach ($fields as $key => $field) {
+                $customField = $this->db->query('SELECT * FROM `'. DB_PREFIX .'custom_field_description` where name ="' . $field . '"');
+                if($customField->num_rows) {
+                    $customField = (object) $customField->row;
+                    foreach($relationship as $table){
+                        $query = $this->db->query('select * from ' . DB_PREFIX . $table . " where custom_field_id='".$customField->custom_field_id."'");
+                        if($query->num_rows){
+                            $this->db->query('DELETE FROM `' . DB_PREFIX . $table . '` WHERE `' . DB_PREFIX . $table . '`.`custom_field_id` = ' . $customField->custom_field_id);
+                        }
+                    }
+                    $this->db->query('DELETE FROM `' . DB_PREFIX . 'custom_field_description` WHERE `' . DB_PREFIX .'custom_field_description`.`custom_field_id` = ' . $customField->custom_field_id);
+                }
+            }
+        }
+    }
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/guest.php">
+        <operation>
+            <search>
+                <![CDATA[$custom_fields = $this->model_account_custom_field->getCustomFields($customer_group_id);]]>
+            </search>
+            <add position="replace">
+                <![CDATA[$custom_fields = $this->model_account_custom_field->getCustomFields();]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[$this->session->data['shipping_address']['zone_id'] = $this->request->post['zone_id'];]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                $this->session->data['shipping_address']['zone_id'] = $this->request->post['zone_id'];
+				$this->session->data['shipping_address']['collivery_town'] = $this->request->post['collivery_town'];
+				$this->session->data['shipping_address']['collivery_suburb'] = $this->request->post['collivery_suburb'];
+				$this->session->data['shipping_address']['collivery_location_type'] = $this->request->post['collivery_location_type'];
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[$this->session->data['guest']['telephone'] = $this->request->post['telephone'];]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                   $this->session->data['guest']['telephone'] = $this->request->post['telephone'];
+                    /** @collivery-data */
+                    $this->session->data['guest']['collivery_town'] = $this->request->post['collivery_town'];
+                    $this->session->data['guest']['collivery_suburb'] = $this->request->post['collivery_suburb'];
+                    $this->session->data['guest']['collivery_location_type'] = $this->request->post['collivery_location_type'];
+
+                    /** @endcollivery-data */
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/guest.php|catalog/controller/checkout/register.php">
+        <operation>
+            <search>
+                <![CDATA[$custom_fields = $this->model_account_custom_field->getCustomFields($customer_group_id);]]>
+            </search>
+            <add position="replace">
+                <![CDATA[$custom_fields = $this->model_account_custom_field->getCustomFields();]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/controller/sale/order.php">
+        <operation>
+            <search>
+                <![CDATA[public function add() {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+    public function createColliveryAddress(){
+        $order_id = $this->request->get['order_id'];
+        if($order_id){
+            $order_object = (object) $this->db->query('select * from '. DB_PREFIX . "order where order_id='$order_id'")->row;
+            $post_data = (object) $this->request->post;
+            if(!$order_object->waybill_id && ($order_object->collivery_town != $post_data->shipping_collivery_town || $order_object->collivery_suburb != $post_data->shipping_collivery_suburb)){ //if address is not created
+                $address_data['street'] = $order_object->shipping_address_1;
+                $address_data['location_type'] = $post_data->shipping_collivery_location_type;
+                $address_data['suburb_id'] = $post_data->shipping_collivery_suburb;
+                $address_data['town_id'] = $post_data->shipping_collivery_town;
+                $address_data['custom_id'] = $order_object->customer_id;
+                $address_data['full_name'] = $order_object->firstname . ' ' . $order_object->lastname;
+                $address_data['cellphone'] = $order_object->telephone;
+                $address_data['phone'] = $order_object->telephone;
+                $address_data['email'] = $order_object->email;
+
+                list('address_id' => $address_id, 'contact_id' => $contact_id) = $this->collivery->addAddress($address_data);
+                $this->db->query('update ' .DB_PREFIX . 'order set collivery_town="'. $address_data['town_id']. '", collivery_suburb="'. $address_data['suburb_id']. '", collivery_location_type="'. $address_data['location_type']. '", collivery_to_address_id="' . $address_id .'", collivery_to_contact_id="' . $contact_id . '" where order_id="' . $order_object->order_id . '"');
+            }
+            $this->acceptAndCreateWaybill($order_id);
+        }
+    }
+
+    public function acceptAndCreateWaybill($order_id)
+    {
+        $data = $this->db->query("select * from " . DB_PREFIX . "order where order_id='$order_id'")->row;
+        if(!$data['waybill_id'] && $data['collivery_from_address_id'] && $data['collivery_to_address_id']){ //if waybill is not created
+            $data_object = (object) $data;
+            $quote['parcels'] = [];
+            $quote['collivery_from'] = $data_object->collivery_from_address_id;
+            $quote['contact_from'] = $data_object->collivery_from_contact_id;
+            $this->load->model('sale/order');
+            $this->load->model('catalog/product');
+            $order_products = $this->model_sale_order->getOrderProducts($data['order_id']);
+            foreach ($order_products as $key => $order_product){
+                $product_model = (object) $order_product;
+                $product = (object) $this->model_catalog_product->getProduct($product_model->product_id);
+                $quote['parcels'][$key]['width'] = $product->width;
+                $quote['parcels'][$key]['height'] = $product->height;
+                $quote['parcels'][$key]['length'] = $product->length;
+                $quote['parcels'][$key]['weight'] = $product->weight;
+            }
+            list(1 => $service_type_id) = explode('.', $data['shipping_code']);
+            $quote['collivery_to'] = $data_object->collivery_to_address_id;
+            $quote['contact_to'] = $data_object->collivery_to_contact_id;
+            $quote['service'] = $service_type_id;
+            $quote['collivery_type'] = 2; //package
+            $quote['cover'] = 0;
+            $quote['rica'] = 0;
+            $validated_collivery_data = $this->collivery->validate($quote);
+            if($validated_collivery_data){
+                $data['quote_data'] = $validated_collivery_data;
+                $check = $this->db->query('select waybill_id from ' .DB_PREFIX . 'order where order_id="' . $data_object->order_id . '"')->row['waybill_id'];
+                if(!$check){
+                    if(!$check){
+                        $waybill_id = $this->collivery->addCollivery($validated_collivery_data);
+                        if($waybill_id){
+                            $this->db->query('update ' .DB_PREFIX . "order set `collivery_price_data`='". json_encode($validated_collivery_data)."', waybill_id='" . $waybill_id . "' where order_id='" . $data_object->order_id . "'");
+                            if($this->config->get('auto_accept_waybill')){
+                                $this->collivery->acceptCollivery($waybill_id);
+                            }
+                           $data['waybill_id'] = $waybill_id;
+                        }
+                    }
+                }
+            }
+        }
+
+        $data = $this->db->query("select * from " . DB_PREFIX . "order where order_id='$order_id'")->row;
+
+        $response['waybill_id'] = $data['waybill_id'];
+        $response['status'] = '';
+        $response['pod'] = '';
+        $response['shipping_method'] = $data['shipping_method'];
+        $response['collivery_from'] = $this->collivery->getAddress($data['collivery_from_address_id'])['nice_address'];
+        $response['collivery_to'] = $this->collivery->getAddress($data['collivery_to_address_id'])['nice_address'];
+
+        header('Content-Type: application/json');
+        echo json_encode($response);
+    }
+                ]]>
+            </add>
+        </operation>
+
+        <operation>
+            <search index="1">
+                <![CDATA[$this->load->model('localisation/order_status');]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+    /** @collivery-data */
+
+        if (
+            isset($this->request->post['order_id']
+            , $this->request->post['collivery_location_type']
+            , $this->request->post['collivery_town']
+            , $this->request->post['collivery_suburb'])
+        ) {
+            $o = $this->request->post['order_id'];
+            $clt = $this->request->post['collivery_location_type'];
+            $ct = $this->request->post['collivery_town'];
+            $cs = $this->request->post['collivery_suburb'];
+            $this->db->query('update ' . DB_PREFIX ."order set collivery_location_type='$clt', collivery_town='$ct', collivery_suburb='$cs' where order_id='$o'");
+        }
+        list($code, $service_type_id) = explode('.', $data['shipping_code']);
+        $data['is_mds'] = $code == 'mds';
+        $location_types = $this->collivery->getLocationTypes();
+        $towns = $this->collivery->getTowns();
+        $suburbs = $this->collivery->getAllSuburbs();
+        if($data['is_mds']){
+
+            $data['collivery_services'] = $this->collivery->getServices();
+
+            $order = $this->db->query('select * from ' . DB_PREFIX . 'order where order_id=' . $data['order_id'] )->row;
+
+            foreach ($order as $column => $column_value){
+                $data[$column] = $column_value;
+            }
+
+            if(!$data['collivery_from_address_id']){
+                $address = $this->collivery->getDefaultAddress();
+                list('address_id' => $address_id) = $address['address'];
+                list('contact_id' => $contact_id) = current($address['contacts']);
+                $data['collivery_from_address_id'] = $address_id;
+                $this->db->query('update ' .DB_PREFIX . 'order set collivery_from_address_id="' . $address_id . '", collivery_from_contact_id="' . $contact_id .'" where order_id="' . $data['order_id'] . '"');
+            }
+
+            //Collivery collection address
+            if($data['collivery_from_address_id']){
+                $data['collivery_collection_address'] = $this->collivery->getAddress($data['collivery_from_address_id']);
+            }
+            //Collivery delivery address
+            if($data['collivery_to_address_id']){
+                $data['collivery_delivery_address'] = $this->collivery->getAddress($data['collivery_to_address_id']);
+            }
+
+
+            $data['waybill_service_name'] = $data['collivery_services'][$service_type_id];
+            $data['waybill_service_id'] = $service_type_id;
+
+            $order_products = $this->model_sale_order->getOrderProducts($data['order_id']);
+            $this->load->model('catalog/product');
+
+            $data['order_products'] = $order_products;
+            if(!$data['waybill_id'] && $data['collivery_from_address_id'] && $data['collivery_to_address_id']){ //if waybill is not created
+                $data_object = (object) $data;
+                $quote['parcels'] = [];
+                $quote['collivery_from'] = $data_object->collivery_from_address_id;
+                $quote['contact_from'] = $data_object->collivery_from_contact_id;
+                foreach ($order_products as $key => $order_product){
+                    $product_model = (object) $order_product;
+                    $product = (object) $this->model_catalog_product->getProduct($product_model->product_id);
+                    $quote['parcels'][$key]['width'] = $product->width;
+                    $quote['parcels'][$key]['height'] = $product->height;
+                    $quote['parcels'][$key]['length'] = $product->length;
+                    $quote['parcels'][$key]['weight'] = $product->weight;
+                }
+                $quote['collivery_to'] = $data_object->collivery_to_address_id;
+                $quote['contact_to'] = $data_object->collivery_to_contact_id;
+                $quote['service'] = $service_type_id;
+                $quote['collivery_type'] = 2; //package
+                $quote['cover'] = 0;
+                $quote['rica'] = 0;
+                $validated_collivery_data = $this->collivery->validate($quote);
+                if($validated_collivery_data){
+                    $data['quote_data'] = $validated_collivery_data;
+                }
+            }
+
+
+            if($data['collivery_town']){
+                $data['town'] = $towns[$data['collivery_town']];
+            }
+            if($data['collivery_suburb']){
+                $data['suburb'] = $suburbs[$data['collivery_suburb']];
+            }
+            if($data['collivery_location_type']){
+                $data['location_type'] = $location_types[$data['collivery_location_type']];
+            }
+            if($data['waybill_id']){
+                //$data['waybill_info'] = $this->collivery->getColliveryStatus($data['waybill_id']);
+                $data['waybill_status'] = $this->collivery->getStatus($data['waybill_id']);
+                $data['waybill_pod'] = $this->collivery->getPod($data['waybill_id']);
+                $data['waybill_enc'] = (string) base64_encode ($data['waybill_id']);
+            }
+        }
+
+
+        /** @endcolivery-data */
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[public function getForm() {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+                    $this->load->language('extension/shipping/mds');
+                    $data = $this->language->all();
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[$data['footer'] = $this->load->controller('common/footer');]]>
+            </search>
+            <add position="after">
+                <![CDATA[       $data['tab_mds'] = "Collivery.net";]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/checkout.php">
+        <operation>
+            <search>
+                <![CDATA[public function country() {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+                    public function getTownSuburbs() {
+                        $townId = $this->request->get['town_id'];
+                        $respond = "";
+                        foreach ($this->collivery->getSuburbs($townId) as $key => $sub) {
+                            $respond .= '<option value="'.$key.'">'. $sub .'</option>';
+                        }
+                        echo $respond;
+                    }
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/controller/sale/customer.php">
+        <operation>
+            <search>
+                <![CDATA[public function transaction() {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+                    public function getTownSuburbs() {
+                        $townId = $this->request->get['town_id'];
+                        $respond = "";
+                        foreach ($this->collivery->getSuburbs($townId) as $key => $sub) {
+                            $respond .= '<option value="'.$key.'">'. $sub .'</option>';
+                        }
+                        echo $respond;
+                    }
+                ]]>
+            </add>
+        </operation>
+    </file> <!-- !exist() -->
+    <!-- End Admin Controllers -->
+    <!-- Catalog Controllers -->
+
+    <file path="catalog/model/account/address.php">
+        <operation>
+            <search>
+                <![CDATA['address_id'     => $address_query->row['address_id'],]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                'address_id'     => $address_query->row['address_id'],
+				'collivery_town'     => $address_query->row['collivery_town'],
+				'collivery_suburb'     => $address_query->row['collivery_suburb'],
+				'collivery_location_type'     => $address_query->row['collivery_location_type'],
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[public function editAddress($address_id, $data) {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+                    $sql['collivery_town'] = $data['collivery_town'];
+                    $sql['collivery_suburb'] = $data['collivery_suburb'];
+                    $sql['collivery_location_type'] = $data['collivery_location_type'];
+                    $string = '';
+                    foreach($sql as $k => $v){
+                        $string .= "$k='$v', ";
+                    }
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA["UPDATE " . DB_PREFIX . "address SET]]>
+            </search>
+            <add position="replace">
+                <![CDATA["UPDATE " . DB_PREFIX . "address SET $string]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[public function addAddress($customer_id, $data) {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+        $sql['collivery_location_type'] = $data['collivery_location_type'];
+        $sql['collivery_town'] = $data['collivery_town'];
+        $sql['collivery_suburb'] = $data['collivery_suburb'];
+        $string = '';
+        foreach($sql as $k => $v){
+            $string .= "$k='$v', ";
+        }
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA["INSERT INTO " . DB_PREFIX . "address SET]]>
+            </search>
+            <add position="replace">
+                <![CDATA["INSERT INTO " . DB_PREFIX . "address SET $string]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/account/address.php">
+        <operation>
+        <search>
+            <![CDATA[if ($custom_field['location'] == 'address') {]]>
+        </search>
+        <add position="before">
+            <![CDATA[//if($custom_field['name'] == 'Town' || $custom_field['name'] == 'Suburb' || $custom_field['name'] == 'Location Type')continue;]]>
+        </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/shipping_address.php">
+        <operation>
+            <search>
+                <![CDATA[if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    if (isset($custom_field['location']) && $custom_field['location'] == 'address') {
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/payment_address.php">
+        <operation>
+            <search>
+                <![CDATA[$address_id = $this->model_account_address->addAddress($this->customer->getId(), $this->request->post);]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+                    /** @collivery-data */
+					    $this->session->data['collivery_collection_address'] = $this->db->query("select * from " . DB_PREFIX . "address where address_id='$address_id'")->row;
+                    /** @endcollivery-data */
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    if (isset($custom_field['location']) && $custom_field['location'] == 'address') {
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/checkout/payment_address.php|catalog/controller/checkout/shipping_address.php">
+        <operation>
+            <search index="1">
+                <![CDATA[$custom_fields = $this->model_account_custom_field->getCustomFields($this->config->get('config_customer_group_id'));]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                   $custom_fields = $this->model_account_custom_field->getCustomFields();
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search index="1">
+                <![CDATA[if (!$json) {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+        /** @collivery-data */
+        if(isset($this->request->post['address_id'])){
+            $address_id = $this->request->post['address_id'];
+            $result = $this->db->query("select collivery_town, collivery_suburb, collivery_location_type from " . DB_PREFIX . "address where address_id='$address_id'");
+            if($result->num_rows){
+                $address = (object) $result->row;
+                if(!$address->collivery_town || !$address->collivery_suburb || !$address->collivery_location_type){
+                    //redirect
+                    $json['redirect'] =  "index.php?route=account/address/edit&address_id=$address_id";
+                }
+            }
+        }
+        /** @endcollivery-data */
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    if (isset($custom_field['location']) && $custom_field['location'] == 'address') {
+                ]]>
+            </add>
+        </operation>
+    </file>
+
+    <file path="catalog/controller/account/register.php">
+        <operation>
+            <search>
+                <![CDATA[if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    if (isset($custom_field['location']) && $custom_field['location'] == 'address') {
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/api/payment.php">
+        <operation>
+            <search>
+                <![CDATA[if ($custom_field['required'] && empty($this->request->post['custom_field'][$custom_field['location']][$custom_field['custom_field_id']])) {]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    if ($custom_field['required'] && empty($this->request->post['custom_field'][$custom_field['custom_field_id']])) {
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/controller/api/shipping.php|catalog/controller/api/payment.php">
+        <operation>
+            <search>
+                <![CDATA[if (if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="before">
+                <![CDATA[if($custom_field['name'] == 'Town' || $custom_field['name'] == 'Suburb' || $custom_field['name'] == 'Location Type')continue;]]>
+            </add>
+        </operation>
+
+    </file>
+    <file path="catalog/controller/api/shipping.php">
+        <operation>
+            <search>
+                <![CDATA['firstname'      => $this->request->post['firstname'],]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    'firstname'      => $this->request->post['firstname'],
+                    'collivery_town'      => $this->request->post['shipping_collivery_town'],
+                    'collivery_location_type'      => $this->request->post['shipping_collivery_location_type'],
+                ]]>
+            </add>
+        </operation>
+
+    </file>
+    <file path="admin/model/sale/order.php">
+        <operation>
+            <search>
+                <![CDATA['order_id'                => $order_query->row['order_id'],]]>
+            </search>
+            <add position="replace">
+                'order_id'                => $order_query->row['order_id'],
+                'waybill_id'                => $order_query->row['waybill_id'],
+            </add>
+        </operation>
+    </file>
+    <file path="admin/view/template/sale/order_form.twig">
+        <operation>
+            <search index="1">
+                <![CDATA[$('a[href=\'#tab-total\']').tab('show');]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                //$('a[href=\'#tab-mds\']').tab('show');
+                    const colliveryElements = $(document).find('[name="shipping_collivery_town"], [name="shipping_collivery_suburb"], [name="shipping_collivery_location_type"]');
+                      let errors = [];
+                      colliveryElements.each(function() {
+                            if(!$(this).val()){
+                                alert('Please select Town, Suburb and Location Type');
+                              errors.push('Data Missing');
+                            }
+                       });
+                      if(!errors.length){
+                        $('#collivery-confirm-create-address-modal').modal('show');
+                      }
+
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search index="0">
+                <![CDATA[</script>]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[<li class="disabled"><a href="#tab-total" data-toggle="tab">5. {{ tab_total }}</a></li>]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                    <li class="disabled">
+                        <a href="#tab-mds" data-toggle="tab">
+                            5. {{ tab_collivery }}
+                        </a>
+                    </li>
+                    <li class="disabled">
+                        <a href="#tab-total" data-toggle="tab">
+                            6. {{ tab_total }}
+                        </a>
+                    </li>
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[return false;]]>
+            </search>
+            <add position="replace">
+                <![CDATA[return false;]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[<div class="tab-pane" id="tab-total">]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+            <div class="tab-pane" id="tab-mds">
+                  <div class="row">
+                      <div class="col-md-12 text-center">
+                          <h1 class="center">
+                              <img width="15%" class="float-right" src = "https://collivery.net/img/frontend/sliders/takealot-banner/collivery-logo.png" />
+                          </h1>
+                      </div>
+                  </div>
+                  <div id="sub-tab-mds">
+                  {% if is_mds %}
+                     <div class="row">
+                      <div class="col-md-12">
+                          <table class="table table-bordered">
+                              <tbody>
+                              <tr>
+                                  <td colspan="8" class="text-center bg-info">Collivery Information</td>
+                              </tr>
+                              <tr>
+                                  <td>Waybill ID</td>
+                                  <td>Collivery Status</td>
+                                  <td>POD</td>
+                                  <td>Service Type</td>
+                                  <td>Collection Address(Default Address)</td>
+                                  {% if collivery_delivery_address is not empty  %}
+
+                                      <td>Delivery Address</td>
+                                  {% else %}
+                                      <td>Town</td>
+                                      <td>Suburb</td>
+                                      <td>Location Type</td>
+                                  {% endif %}
+                              </tr>
+                              <tr>
+                                  <td>{{ waybill_id }}</td>
+                                  <td>{{  status }}</td>
+                                  <td>{{  pod }}</td>
+                                  <td>{{ waybill_service_name }}</td>
+                                  <td>{{ collivery_collection_address.nice_address }}</td>
+                                  {% if collivery_delivery_address is not empty %}
+                                      <td>{{ collivery_delivery_address.nice_address }}</td>
+                                  {% else %}
+                                      <td>{{ town }}</td>
+                                      <td>{{ suburb }}</td>
+                                      <td>{{ location_type }}</td>
+                                  {% endif %}
+                              </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+                      {% if waybill_info %}
+                        <div class="row">
+                          <div class="col-md-12">
+                              <table class="table table-striped">
+                                  <thead>
+                                    <tr>
+                                        <td>Status</td>
+                                        <td>Delivery Date</td>
+                                        <td>ETA</td>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                  <tr>
+                                      <td>{{ waybill_info.status_text }}</td>
+                                      <td>{{ waybill_info.delivery_date }}</td>
+                                      <td>{{ waybill_info.eta_text }}</td>
+                                  </tr>
+                                  </tbody>
+                              </table>
+                          </div>
+                      </div>
+                      {% endif %}
+                        {% if not waybill_id|default  and addresses is not empty and false %}
+                          <div class="row">
+                              <div class="col-md-6">
+                                  <h6>Collection Address</h6>
+                                  <div class="well">
+                                      <div class="row" >
+                                          {{ collection_address.firstname ~ ' ' ~ collection_address.lastname }}<br>
+                                          {{ collection_address.company }}<br>
+                                          {{ collection_address.address_1 ~ ', ' ~ collection_address.address_2 ~ ' ' ~ collection_address.city }}<br>
+                                          {{ collection_address.postcode }}<br>
+                                      </div>
+                                      <div class="row">
+                                          <div class="col-md-12">
+                                              <hr/>
+                                              <h5>Change Address</h5>
+                                              <div class="form-group">
+                                                  <div class="col-lg-12">
+                                                      <label class="control-label" for="input-collection_shipping-address">
+                                                          {{ entry_address }}</label>
+                                                      <select name="collection_shipping_address_id" id="input_collection_shipping-address" class="form-control">
+                                                          {% for address in addresses %}
+                                                              <option value="{{ address.address_id }}">
+                                                                  {{ address.firstname }}
+                                                                  {{ address.lastname }} -
+                                                                  {{ address.company }}
+                                                                  {{ address.address_1 }},
+                                                                  {{ address.city }},
+                                                                  {{ address.postcode }},
+                                                              </option>
+                                                          {% endfor %}
+                                                      </select>
+                                                      <br>
+                                                      <a class="btn btn-default pull-left" href="index.php?route=sale/customer/edit&user_token={{ user_token }}&customer_id={{ collectionAddressId}}"><i class="icon-plus-circle"></i> Add Collection Address </a>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div class="col-md-6">
+                                  <h6>Delivery Address</h6>
+                                  <div class="well">
+                                      <div class="row">
+                                          {{ delivery_address.firstname ~ ' ' ~ delivery_address.lastname }}<br>
+                                          {{ delivery_address.company }}<br>
+                                          {{ delivery_address.address_1 ~ ', ' ~ delivery_address.address_2 ~ ' ' ~ delivery_address.city }}<br>
+                                          {{ delivery_address.postcode }}<br>
+                                      </div>
+                                      <div class="row">
+                                          <div class="col-md-12">
+                                              <hr/>
+                                              <h5>Change Address</h5>
+                                              <div class="form-group">
+                                                  <div class="col-lg-12"><label class="control-label" for="input-delivery_shipping_address">
+                                                          {{ entry_address }}</label>
+                                                      <select name="delivery_shipping_address_id" id="input_delivery_shipping_address" class="form-control">
+                                                          {% for address_data in addresses %}
+                                                              {% if collection_address.address_id is same as(address_id) %}
+                                                                  {% set selected  = "selected" %}
+                                                              {% else %}
+                                                                  {% set selected  = "" %}
+
+                                                              {% endif %}
+                                                              <option value="{{ address_data.address_id }}">
+                                                                  {{ address_data.firstname }}
+                                                                  {{ address_data.lastname }} -
+                                                                  {{ address_data.company }} &nbsp;
+                                                                  {{ address_data.address_1 }},
+                                                                  {{ address_data.city }},
+                                                                  {{ address_data.postcode }},
+                                                              </option>
+                                                          {% endfor %}
+                                                      </select><br><a class="btn btn-default pull-left" href="index.php?route=sale/customer/edit&user_token={{ user_token }}&customer_id={{ customer_id }}"><i class="icon-plus-circle"></i> Add Delivery Address </a>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                          </div>
+                        {% endif %}
+                  {% else %}
+                      <div class="row">
+                          <div class="col-md-12">
+                              <br>
+                              <br>
+                              <h5 class="text-center text-info text-uppercase">Please not that the customer did not use Collivery.net shipping method</h5>
+                          </div>
+                      </div>
+                  {%  endif %}
+                  </div>
+                  <div class="row">
+
+                      <div {% if  not waybill_id and is_mds %} }} class="col-md-3 text-left" {% else %} class="col-md-6 text-left" {% endif %}>
+                          <button type="button"  class="btn btn-default"><i class="fa fa-arrow-left"></i>
+                              {{ button_back }}
+                          </button>
+                      </div>
+                      {% if  not waybill_id and is_mds %}
+                          <div class="col-md-6 text-center">
+                              <button class="btn btn-primary btn-block" type="button" id="accept-waybill"><i class="icon-question-circle"></i>Accept Waybill</button>
+                          </div>
+                      {% endif %}
+                      <div {% if  not waybill_id and is_mds %} }} class="col-md-3" {% else %} class="col-md-6" {% endif %}>
+                          <button type="button" id="button-mds-shipping" data-loading-text="{{ text_loading }}" class="pull-right btn btn-gray"><i class="fa fa-arrow-right"></i>
+                              {{ button_continue }}
+                          </button>
+                      </div>
+                  </div>
+
+              </div>
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[[data: $('#tab-payment input[type=\'text\'], #tab-payment input[type=\'hidden\'], #tab-payment input[type=\'radio\']:checked, #tab-payment input[type=\'checkbox\']:checked, #tab-payment select, #tab-payment textarea'),]]>
+            </search>
+            <add position="replace">
+                <![CDATA[[
+                    data: $('body').find('textarea, input, select').serialize(),
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <!-- End Admin Views -->
+    <!-- Catalog views -->
+    <file path="catalog/view/theme/default/template/checkout/checkout.twig|catalog/view/theme/default/template/account/address_form.twig">
+        <operation>
+            <search index="0">
+                <![CDATA[</script>]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+                <script type="text/javascript">
+                    $(document)
+                    .ready(function(){
+                        $(document).find('[name="collivery_suburb"]').empty();
+                    })
+                    .on('change', '[name="collivery_town"]', function(){
+                        var townId = $(this).val();
+                        $('[name="collivery_suburb"]').empty();
+                        $.ajax({
+                            url: `index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`,
+                            type: 'get',
+                            success: function(respond) {
+                                $('[name="collivery_suburb"]').html(respond);
+                            },
+                            error: function(xhr, ajaxOptions, thrownError) {
+                                alert('Collivery suburbs could not be found!');
+                                console.log('Could not find collivery suburb, please check if this plugin is installed properly');
+                            }
+                        });
+                    });
+                </script>
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/view/theme/default/template/checkout/guest.twig|catalog/view/theme/default/template/checkout/guest_shipping.twig|catalog/view/theme/default/template/checkout/register.twig|catalog/view/theme/default/template/checkout/shipping_address.twig|catalog/view/theme/default/template/checkout/payment_address.twig|catalog/view/theme/default/template/account/edit.twig|catalog/view/theme/default/template/account/address_form.twig">
+        <operation error="skip">
+            <search>
+                <![CDATA[name="custom_field[{{ custom_field.location }}][{{ custom_field.custom_field_id }}]"]]>
+            </search>
+            <add position="replace">
+                <![CDATA[{% set custom_field_name = custom_field.name|lower|replace({' ': '_'}) %} {% if(custom_field_name == 'location_type' or custom_field_name == 'town' or custom_field_name == 'suburb') %}  name="collivery_{{ custom_field_name }}" {% else %}   name="custom_field[{{ custom_field.location }}][{{ custom_field.custom_field_id }}]" {% endif %} ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/view/template/sale/order_form.twig">
+        <operation error="skip">
+            <search>
+                <![CDATA[<select name="custom_field[{{ custom_field.custom_field_id }}]" id="input-payment-custom-field{{ custom_field.custom_field_id }}" class="form-control">]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                {% set custom_field_name = custom_field.name|lower|replace({' ': '_'}) %}
+
+                {% if(custom_field_name == 'location_type' or custom_field_name == 'town' or custom_field_name == 'suburb') %}
+                    <select name="payment_collivery_{{ custom_field_name }}" id="input-payment-custom-field{{ custom_field.custom_field_id }}" class="form-control">
+                {% else %}
+                    <select name="custom_field[{{ custom_field.location }}][{{ custom_field.custom_field_id }}]" id="input-payment-custom-field{{ custom_field.custom_field_id }}" class="form-control">
+                {% endif %}
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search index="0">
+                <![CDATA[<script type="text/javascript">]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+<div id="collivery-confirm-create-address-modal" class="modal fade" role="dialog">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body">
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <h4 style="text-align: center;">Do you want to create an address at Collivery.net for collivery shipping plugin installed</h4>
+                        <p class="text-info">Please note that address will be created based on the information from the "Shipping Details" tab</p>
+                        <ul>
+                            <li>An address is required for a waybill to be created</li>
+                            <li>Change in "Town" may affect price of a waybill</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-2"></div>
+                    <div class="col-md-3 text-left">
+                        <button type="button" class="continue-to-mds-tab btn-sm btn btn-danger" data-dismiss="modal">No</button>
+                    </div>
+                    <div class="col-md-2"></div>
+                    <div class="col-md-3 text-right">
+                        <button id="yes-create-mds-address" type="button" class="continue-to-mds-tab btn-sm btn btn-success" data-dismiss="modal">Yes</button>
+                    </div>
+                    <div class="col-md-2"></div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+<div id="confirm-accept-price-and-create-waybill" class="modal fade" role="dialog">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <h4 style="text-align: center;">
+                            Do you want to create a waybill, please note the following following pricing information
+                        </h4>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-12">
+                        <table class="table table-stripped">
+                            <thead>
+                            <tr>
+                                <td colspan="2">The note the following pricing details</td>
+                            </tr>
+                            <tr>
+                                <td>Item</td>
+                                <td>Value</td>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>Price Including VAT</td>
+                                <td>{{ quote_data.price.inc_vat|round(2, 'floor') }}</td>
+                            </tr>
+                            {% for i,v in quote_data.price %}
+                                <tr>
+                                    <td>{{ i|upper }}</td>
+                                    <td>{{ v }}</td>
+                                </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-2"></div>
+                    <div class="col-md-3 text-left">
+                        <button type="button" class="btn-sm btn btn-danger" data-dismiss="modal">No</button>
+                    </div>
+                    <div class="col-md-2"></div>
+                    <div class="col-md-3 text-right">
+                        <button type="button" id="yes-accept-collivery" class="btn-sm btn btn-success" data-dismiss="modal">Yes</button>
+                    </div>
+                    <div class="col-md-2"></div>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+</div>
+                ]]>
+            </add>
+        </operation>
+        <operation error="skip">
+            <search index="0">
+                <![CDATA[</script>]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+
+<script data-collivery-script="http://collivery.net/">
+    /**
+    * Collivery payment options selected
+    */
+    $('[name="payment_collivery_town"] option[value="{{ payment_collivery_town_id }}"]').prop('selected', true);
+    $('[name="payment_collivery_suburb"] option[value="{{ payment_collivery_suburb_id }}"]').prop('selected', true);
+    $('[name="payment_collivery_location_type"] option[value="{{ payment_collivery_location_type_id }}"]').prop('selected', true);
+
+    /**
+    * Collivery shipping options selected
+    */
+    let sct = $('[name="shipping_collivery_town"] option[value="{{ shipping_collivery_town_id }}"]');
+    if(sct.length){
+        sct.prop('selected', true);
+    }
+
+    let scs = $('[name="shipping_collivery_suburb"] option[value="{{ shipping_collivery_suburb_id }}"]');
+    if(scs.length){
+        scs.prop('selected', true);
+    }else{
+        $('[name="shipping_collivery_suburb"]').empty();
+    }
+
+    let sclt = $('[name="shipping_collivery_location_type"] option[value="{{ shipping_collivery_location_type_id }}"]');
+    if(sclt.length){
+        sclt.prop('selected', true);
+    }
+
+
+    window.userToken = (new URL(window.location.href)).searchParams.get('user_token');
+    $(document)
+    .ready(function(){
+      $(document).find('[name="shipping_collivery_suburb"]').empty();
+    })
+    .on('click', '#dispatched-collivery-button', function(a){
+    a.preventDefault();
+    var order = (new URL(window.location.href)).searchParams.get('order_id');
+    var from = $('[name="collection_shipping_address_id"]').val();
+    var to = $('[name="delivery_shipping_address_id"]').val();
+    $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.userToken}&order=${order}&to=${to}&from=${from}`).done(function(response){
+      if(response.hasOwnProperty('waybill_id')){
+        alert(response.waybill_id);
+      }
+    })
+    })
+    {% if not waybill_id %}
+    .on('click', '#accept-waybill', function(a){
+        a.preventDefault();
+      $('#confirm-accept-price-and-create-waybill').modal('show');
+    })
+    .on('click', '#yes-accept-collivery', function(a){
+      $.ajax(`index.php?route=sale/order/acceptAndCreateWaybill&user_token=${window.userToken}&order_id={{ order_id }}`).done(function(){
+        window.location.reload(true);
+      })
+    })
+    {% endif %}
+    .on('click', '.continue-to-mds-tabg', function(a){
+        $('a[href="#tab-mds"]').tab('show');
+    })
+    .on('change', '[name="shipping_collivery_town"]', function(){
+      var townId = $(this).val();
+      $('[name="shipping_collivery_suburb"]').empty();
+      $.ajax({
+        url: `{{ constant('HTTP_CATALOG') }}index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`,
+        type: 'get',
+        success: function(respond) {
+          $('[name="shipping_collivery_suburb"]').html(respond);
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          console.log(thrownError);
+          console.log('Could not find collivery suburb, please check if this plugin is installed properly');
+        }
+      });
+    }).on('change', '[name="payment_collivery_town"]', function(){
+      var townId = $(this).val();
+      $('[name="payment_collivery_suburb"]').empty();
+      $.ajax({
+        url: `{{ constant('HTTP_CATALOG') }}index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`,
+        type: 'get',
+        success: function(respond) {
+          $('[name="payment_collivery_suburb"]').html(respond);
+        },
+        error: function(xhr, ajaxOptions, thrownError) {
+          console.log(thrownError);
+          console.log('Could not find collivery suburb, please check if this plugin is installed properly');
+        }
+      });
+    }).on('click', '#yes-create-mds-address', function(){
+        $.ajax({
+          url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.userToken}&order_id={{ order_id }}`,
+          method:'post',
+          dataType: 'json',
+          data : $('#tab-shipping').find('select, textarea, input').serialize()
+        }).done(function(response){
+            var waybill_id = response.waybill_id;
+            var status = response.status;
+            var pod = response.pod;
+            var collivery_from = response.collivery_from;
+            var collivery_to = response.collivery_to;
+            var shipping_method = response.shipping_method;
+            var html = `
+              <div class="row">
+                <div class="col-md-12">
+                          <table class="table table-bordered">
+                              <tbody>
+                              <tr>
+                                <td colspan="8" class="text-center bg-info">Collivery Information</td>
+                              </tr>
+                              <tr>
+                                  <td>Waybill ID</td>
+                                  <td>Collivery Status</td>
+                                  <td>POD</td>
+                                  <td>Service Type</td>
+                                  <td>Collection Address(Default Address)</td>
+                                  <td>Delivery Address</td>
+                              </tr>
+                              <tr>
+                                  <td>${waybill_id}</td>
+                                  <td>${status}</td>
+                                  <td>${pod}</td>
+                                  <td>${shipping_method}</td>
+                                  <td>${collivery_from}</td>
+                                  <td>${collivery_to}</td>
+                              </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                    </div>
+            `;
+
+            $(document).find('#sub-tab-mds').html(html);
+            $('a[href=\'#tab-mds\']').tab('show');
+
+
+        });
+    })
+</script>
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/view/template/sale/order_form.twig">
+        <operation error="skip">
+            <search>
+                <![CDATA[<select name="custom_field[{{ custom_field.custom_field_id }}]" id="input-shipping-custom-field{{ custom_field.custom_field_id }}" class="form-control">]]>
+            </search>
+            <add position="replace">
+                <![CDATA[
+                {% set custom_field_name = custom_field.name|lower|replace({' ': '_'}) %}
+
+                {% if(custom_field_name == 'location_type' or custom_field_name == 'town' or custom_field_name == 'suburb') %}
+                    <select name="shipping_collivery_{{ custom_field_name }}" id="input-shipping-custom-field{{ custom_field.custom_field_id }}" class="form-control"
+                    {% else %}
+                    <select name="custom_field[{{ custom_field.location }}][{{ custom_field.custom_field_id }}]" id="input-shipping-custom-field{{ custom_field.custom_field_id }}" class="form-control">
+                    {% endif %}
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="catalog/model/account/custom_field.php">
+        <operation>
+            <search>
+                <![CDATA[foreach ($custom_field_value_query->rows as $custom_field_value) {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+            /** @collivery-data **/
+
+                if($this->collivery){
+                    if($custom_field['name'] === 'Location Type' || $custom_field['name'] === 'Town' || $custom_field['name'] === 'Suburb'){
+                        $custom_field_value_query->rows = array();
+                        if($custom_field['name'] == 'Location Type'){
+                            $data_array = $location_types;
+                        }elseif ($custom_field['name'] == 'Town'){
+                            $data_array = $towns;
+                        }else{
+                            $data_array = $suburbs;
+                        }
+                        foreach ($data_array as $id => $name){
+                            $custom_field_value_query->rows[] = array('custom_field_value_id' => $id, 'name' => $name);
+                        }
+                    }
+                }
+               /** @endcollivery-data **/
+                ]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[foreach ($custom_field_query->rows as $custom_field) {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+       /** @collivery-data **/
+        $location_types = $this->collivery->getLocationTypes();
+        $towns = $this->collivery->getTowns();
+        $suburbs = $this->collivery->getAllSuburbs();
+       /** @endcollivery-data **/
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <file path="admin/model/customer/custom_field.php">
+        <operation>
+            <search index="0">
+                <![CDATA[$custom_field_value_data = array();]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+            /** @collivery-data **/
+        $query = $this->db->query("select * from " . DB_PREFIX . "custom_field_description where custom_field_id={$custom_field_id}");
+        if($query->num_rows){
+            if($query->row['name'] === 'Town' || $query->row['name'] === 'Suburb' || $query->row['name'] === 'Location Type'){
+                $locationtype = $this->collivery->getLocationTypes();
+                $town = $this->collivery->getTowns();
+                $suburb = $this->collivery->getAllSuburbs();
+                $data = ${str_replace(' ', '', strtolower($query->row['name']))};
+                foreach($data as $key => $val){
+                    $custom_field_value_data[$key] = array(
+                        'custom_field_value_id' => $key,
+                        'name'                  => $val
+                    );
+                }
+            }
+            return $custom_field_value_data;
+        }
+               /** @endcollivery-data **/
+                ]]>
+            </add>
+        </operation>
+    </file>
+    <!-- End Catalog Views -->
+    <!-- END VIEWS -->
+</modification>
