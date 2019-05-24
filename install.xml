@@ -953,17 +953,13 @@ protected  $collivery_fields = array(
                   </div>
                   <div class="row">
 
-                      <div {% if  not waybill_id and is_mds %} }} class="col-md-3 text-left" {% else %} class="col-md-6 text-left" {% endif %}>
+                      <div {% if  not waybill_id and is_mds %} }} class="col-md-6 text-left" {% else %} class="col-md-6 text-left" {% endif %}>
                           <button type="button"  class="btn btn-default"><i class="fa fa-arrow-left"></i>
                               {{ button_back }}
                           </button>
                       </div>
-                      {% if  not waybill_id and is_mds %}
-                          <div class="col-md-6 text-center">
-                              <button class="btn btn-primary btn-block" type="button" id="accept-waybill"><i class="icon-question-circle"></i>Accept Waybill</button>
-                          </div>
-                      {% endif %}
-                      <div {% if  not waybill_id and is_mds %} }} class="col-md-3" {% else %} class="col-md-6" {% endif %}>
+
+                      <div {% if  not waybill_id and is_mds %} }} class="col-md-6" {% else %} class="col-md-6" {% endif %}>
                           <button type="button" id="button-mds-shipping" data-loading-text="{{ text_loading }}" class="pull-right btn btn-gray"><i class="fa fa-arrow-right"></i>
                               {{ button_continue }}
                           </button>
@@ -1236,7 +1232,11 @@ protected  $collivery_fields = array(
           console.log('Could not find collivery suburb, please check if this plugin is installed properly');
         }
       });
-    }).on('click', '#yes-create-mds-address', function(){
+    })
+    .on('click', '#button-mds-shipping', function(){
+        $('a[href=\'#tab-total\']').tab('show');
+    })
+    .on('click', '#yes-create-mds-address', function(){
         $.ajax({
           url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.userToken}&order_id={{ order_id }}`,
           method:'post',
