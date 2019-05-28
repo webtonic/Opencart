@@ -1149,46 +1149,43 @@ protected  $collivery_fields = array(
             <add position="after">
                 <![CDATA[
 
-<script data-collivery-script="http://collivery.net/">
-    /**
-    * Collivery payment options selected
-    */
-    $('[name="payment_collivery_town"] option[value="{{ payment_collivery_town_id }}"]').prop('selected', true);
-    $('[name="payment_collivery_suburb"] option[value="{{ payment_collivery_suburb_id }}"]').prop('selected', true);
-    $('[name="payment_collivery_location_type"] option[value="{{ payment_collivery_location_type_id }}"]').prop('selected', true);
-
-    /**
-    * Collivery shipping options selected
-    */
-    let sct = $('[name="shipping_collivery_town"] option[value="{{ shipping_collivery_town_id }}"]');
-    if(sct.length){
-        sct.prop('selected', true);
-    }
-
-    let scs = $('[name="shipping_collivery_suburb"] option[value="{{ shipping_collivery_suburb_id }}"]');
-    if(scs.length){
-        scs.prop('selected', true);
-    }else{
-        $('[name="shipping_collivery_suburb"]').empty();
-    }
-
-    let sclt = $('[name="shipping_collivery_location_type"] option[value="{{ shipping_collivery_location_type_id }}"]');
-    if(sclt.length){
-        sclt.prop('selected', true);
-    }
-
-
-    window.userToken = (new URL(window.location.href)).searchParams.get('user_token');
+<script>
+    var Url = (new URL(window.location.href));
+    var user_token = Url.searchParams.get('user_token');
     $(document)
     .ready(function(){
-      $(document).find('[name="shipping_collivery_suburb"]').empty();
+      (function(fields){
+        fields.map(function(item){
+          let select = $(document)
+                    .find(`select[name="shipping_${item}"]`);
+          let option;
+          if(item === 'collivery_town'){
+            option = select.find("[value='{{ shipping_collivery_town_id }}']");
+          }else if(item === 'collivery_suburb'){
+            option = select.find("[value='{{ shipping_collivery_suburb_id }}']");
+          }else{
+            option = select.find("[value='{{ shipping_collivery_location_type_id }}']");
+          }
+          if(option){
+            if(option.length){
+              option.prop('selected', true);
+            }else if(!option.length && item === 'collivery_suburb'){
+              select.empty();
+            }
+          }
+          $(document)
+            .find(`[name="payment_${item}"]`)
+                .closest('div.form-group.custom-field')
+                    .remove();
+        });
+      })(['collivery_town', 'collivery_suburb', 'collivery_location_type']);
     })
     .on('click', '#dispatched-collivery-button', function(a){
     a.preventDefault();
-    var order = (new URL(window.location.href)).searchParams.get('order_id');
+    var order = Url.searchParams.get('order_id');
     var from = $('[name="collection_shipping_address_id"]').val();
     var to = $('[name="delivery_shipping_address_id"]').val();
-    $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.userToken}&order=${order}&to=${to}&from=${from}`).done(function(response){
+    $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.user_token}&order=${order}&to=${to}&from=${from}`).done(function(response){
       if(response.hasOwnProperty('waybill_id')){
         alert(response.waybill_id);
       }
@@ -1200,7 +1197,7 @@ protected  $collivery_fields = array(
       $('#confirm-accept-price-and-create-waybill').modal('show');
     })
     .on('click', '#yes-accept-collivery', function(a){
-      $.ajax(`index.php?route=sale/order/acceptAndCreateWaybill&user_token=${window.userToken}&order_id={{ order_id }}`).done(function(){
+      $.ajax(`index.php?route=sale/order/acceptAndCreateWaybill&user_token=${window.user_token}&order_id={{ order_id }}`).done(function(){
         window.location.reload(true);
       })
     })
@@ -1242,7 +1239,7 @@ protected  $collivery_fields = array(
     })
     .on('click', '#yes-create-mds-address', function(){
         $.ajax({
-          url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.userToken}&order_id={{ order_id }}`,
+          url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.user_token}&order_id={{ order_id }}`,
           method:'post',
           dataType: 'json',
           data : $('#tab-shipping').find('select, textarea, input').serialize()
