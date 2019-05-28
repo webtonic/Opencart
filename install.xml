@@ -441,6 +441,10 @@ protected  $collivery_fields = array(
             }
         }
 
+        $data['shipping_collivery_town'] = $data['collivery_town'];
+        $data['shipping_collivery_location_type'] = $data['collivery_location_type'];
+        $data['shipping_collivery_suburb'] = $data['collivery_suburb'];
+
 
         /** @endcolivery-data */
                 ]]>
