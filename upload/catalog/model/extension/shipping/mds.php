@@ -66,6 +66,8 @@ class ModelExtensionShippingMds extends Model
             }
             $price                     = $this->getShippingCost($data);
             $price_including_vat       = (int) $price['price']['inc_vat'];
+
+
             switch (true) {
                 case ($service_markup_percentage >= 0 && $service_markup_percentage <= 1):
                     break;
@@ -88,7 +90,7 @@ class ModelExtensionShippingMds extends Model
                 'title' => $service_display_name,
                 'cost' => $display_price,
                 'tax_class_id' => 0,
-                'text' => 'R' . $display_price . ' vat inclusive'
+                'text' => 'R' . $display_price . ' VAT inclusive'
             );
         }
 
