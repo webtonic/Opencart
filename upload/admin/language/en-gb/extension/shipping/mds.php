@@ -22,6 +22,7 @@ $_['entry_demo'] = 'Demo';
 $_['entry_yes'] = 'Yes';
 $_['entry_no'] = 'No';
 $_['entry_auto_create_waybill'] = 'Auto Create Waybill';
+$_['entry_auto_accept_waybill'] = 'Auto Accept Quote';
 $_['entry_auto_create_address'] = 'Auto Create Address';
 $_['entry_default_collection_address'] = 'Default Collection Address';
 
