@@ -97,10 +97,10 @@ class ModelExtensionShippingMds extends Model
         $error = '';
         if ($quote_data) {
             $method_data = array(
-                'code' => 'mds' . $key,
+                'code' => 'mds',
                 'title' => 'MDS Collivery.net',
                 'quote' => $quote_data,
-                'sort_order' => $key,
+                'sort_order' => 1,
                 'error' => $error
             );
             return $method_data;
