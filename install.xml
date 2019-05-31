@@ -322,9 +322,8 @@ protected  $collivery_fields = array(
         $data = $this->db->query("select * from " . DB_PREFIX . "order where order_id='$order_id'")->row;
 
         $response['waybill_id'] = $data['waybill_id'];
-        $response['status'] = '';
-        $response['pod'] = '';
-        $response['shipping_method'] = $data['shipping_method'];
+        $response['waybill_status'] = 'STATUS';
+        $response['waybill_service'] = 'SERVICE';
         $response['collivery_from'] = $this->collivery->getAddress($data['collivery_from_address_id'])['nice_address'];
         $response['collivery_to'] = $this->collivery->getAddress($data['collivery_to_address_id'])['nice_address'];
 
@@ -756,48 +755,72 @@ protected  $collivery_fields = array(
                               dataType: 'json',
                               data : $('#tab-shipping').find('select, textarea, input').serialize()
                             }).done(function(response){
-                                var waybill_id = response.waybill_id;
-                                var status = response.status;
-                                var pod = response.pod;
-                                var collivery_from = response.collivery_from;
-                                var collivery_to = response.collivery_to;
-                                var shipping_method = response.shipping_method;
-                                var html = `
-                                  <div class="row">
-                                    <div class="col-md-12">
-                                              <table class="table table-bordered">
-                                                  <tbody>
-                                                  <tr>
-                                                    <td colspan="8" class="text-center bg-info">Collivery Information</td>
-                                                  </tr>
-                                                  <tr>
-                                                      <td>Waybill ID</td>
-                                                      <td>Collivery Status</td>
-                                                      <td>POD</td>
-                                                      <td>Service Type</td>
-                                                      <td>Collection Address(Default Address)</td>
-                                                      <td>Delivery Address</td>
-                                                  </tr>
-                                                  <tr>
-                                                      <td>${waybill_id}</td>
-                                                      <td>${status}</td>
-                                                      <td>${pod}</td>
-                                                      <td>${shipping_method}</td>
-                                                      <td>${collivery_from}</td>
-                                                      <td>${collivery_to}</td>
-                                                  </tr>
-                                                  </tbody>
-                                              </table>
-                                          </div>
-                                        </div>
-                                `;
+                                var { waybill_id : waybill_id, waybill_status : waybill_status, waybill_service : waybill_service, collivery_from : collivery_from, collivery_to : collivery_to} = response,
+             html = `
+              <div class="row">
+                          <div class="col-md-4 text-left">
+                              <h4>
+                                  Waybill No: ${ waybill_id } <b></b>
+                              </h4>
+                          </div>
+                          <div class="col-md-4 text-center">
+                              <h4>
+                                  Service Type: ${ waybill_service }<b></b>
+                              </h4>
+                          </div>
+                          <div class="col-md-4 text-right">
+                              <h4>
+                                  Waybill Status: ${ waybill_status }<b></b>
+                              </h4>
+                          </div>
+                      </div>
+                     <div class="row">
+                      <div class="col-md-12">
+                          <table class="table table-bordered">
+                              <tbody>
+                              <tr>
+                                  <td colspan="8" class="text-center text-uppercase bg-info">Collivery Information</td>
+                              </tr>
+                              <tr>
+                                  <td class="text-center"><b>Collection Address</b></td>
+                                  <td class="text-center"><b>Delivery Address</b></td>
+                              </tr>
+                              <tr>
+                                  <td>${ collivery_from }</td>
+                                  <td>${ collivery_to }</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                      </div>
+                  </div>
+                    <div class="row">
+                      <div class="col-md-12">
+                          <table class="table table-striped">
+                              <thead>
+                                <tr>
+                                    <td>Status</td>
+                                    <td>Delivery Date</td>
+                                    <td>ETA</td>
+                                </tr>
+                              </thead>
+                              <tbody>
+                              <tr>
+                                  <td></td>
+                                  <td></td>
+                                  <td></td>
+                              </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+            `;
 
-                                $(document).find('#sub-tab-mds').html(html);
-                            }).always(function(){
-                                $('a[href="#tab-mds"]').tab('show');
-                                $('#button-shipping-address').button('reset');
-                            });
-                      }
+                $(document).find('#sub-tab-mds').html(html);
+                }).always(function(){
+                    $('a[href="#tab-mds"]').tab('show');
+                    $('#button-shipping-address').button('reset');
+                });
+            }
 
                 ]]>
             </add>
@@ -852,24 +875,7 @@ protected  $collivery_fields = array(
          <hr/>
       </div>
    </div>
-   <div class="row">
-      <div class="col-md-4 text-left">
-         <h4>
-            Waybill No: <b>{{ waybill_id }}</b>
-         </h4>
-      </div>
-      <div class="col-md-4 text-center">
-         <h4>
-            Service Type: <b>{{ waybill_service_name }}</b>
-         </h4>
-      </div>
-      <div class="col-md-4 text-right">
-         <h4>
-            Waybill Status: <b>{{ waybill_info.status_text }}</b>
-         </h4>
-      </div>
-   </div>
-   <div id="sub-tab-mdsf">
+   <div id="sub-tab-mds">
       {% if is_mds %}
       <div class="row">
          <div class="col-md-12">
@@ -1215,39 +1221,47 @@ protected  $collivery_fields = array(
           data : $('#tab-shipping').find('select, textarea, input').serialize()
         }).done(function(response){
             var waybill_id = response.waybill_id;
-            var status = response.status;
-            var pod = response.pod;
+            var waybill_status = '';
+            var waybill_service = '';
             var collivery_from = response.collivery_from;
             var collivery_to = response.collivery_to;
-            var shipping_method = response.shipping_method;
             var html = `
               <div class="row">
-                <div class="col-md-12">
+                          <div class="col-md-4 text-left">
+                              <h4>
+                                  Waybill No: ${ waybill_id } <b></b>
+                              </h4>
+                          </div>
+                          <div class="col-md-4 text-center">
+                              <h4>
+                                  Service Type: ${ waybill_service }<b></b>
+                              </h4>
+                          </div>
+                          <div class="col-md-4 text-right">
+                              <h4>
+                                  Waybill Status: ${ waybill_status }<b></b>
+                              </h4>
+                          </div>
+                      </div>
+                     <div class="row">
+                      <div class="col-md-12">
                           <table class="table table-bordered">
                               <tbody>
                               <tr>
-                                <td colspan="8" class="text-center bg-info">Collivery Information</td>
+                                  <td colspan="8" class="text-center text-uppercase bg-info">Collivery Information</td>
                               </tr>
                               <tr>
-                                  <td>Waybill ID</td>
-                                  <td>Collivery Status</td>
-                                  <td>POD</td>
-                                  <td>Service Type</td>
-                                  <td>Collection Address(Default Address)</td>
-                                  <td>Delivery Address</td>
+                                  <td width="50%" class="text-center"><b>Collection Address</b></td>
+                                  <td width="50%" class="text-center"><b>Delivery Address</b></td>
                               </tr>
                               <tr>
-                                  <td>${waybill_id}</td>
-                                  <td>${status}</td>
-                                  <td>${pod}</td>
-                                  <td>${shipping_method}</td>
-                                  <td>${collivery_from}</td>
-                                  <td>${collivery_to}</td>
+                                  <td width="50%">${ collivery_from }</td>
+                                  <td width="50%">${ collivery_to }</td>
                               </tr>
-                              </tbody>
+                            </tbody>
                           </table>
                       </div>
-                    </div>
+                  </div>
             `;
 
             $(document).find('#sub-tab-mds').html(html);
