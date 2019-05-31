@@ -259,7 +259,7 @@ protected  $collivery_fields = array(
         if($order_id){
             $order_object = (object) $this->db->query('select * from '. DB_PREFIX . "order where order_id='$order_id'")->row;
             $post_data = (object) $this->request->post;
-            if(!$order_object->waybill_id && ($order_object->collivery_town != $post_data->shipping_collivery_town || $order_object->collivery_suburb != $post_data->shipping_collivery_suburb)){ //if address is not created
+            if(!$order_object->waybill_id || ($order_object->collivery_town != $post_data->shipping_collivery_town || $order_object->collivery_suburb != $post_data->shipping_collivery_suburb)){ //if address is not created
                 $address_data['street'] = $order_object->shipping_address_1;
                 $address_data['location_type'] = $post_data->shipping_collivery_location_type;
                 $address_data['suburb_id'] = $post_data->shipping_collivery_suburb;
@@ -280,7 +280,7 @@ protected  $collivery_fields = array(
     public function acceptAndCreateWaybill($order_id)
     {
         $data = $this->db->query("select * from " . DB_PREFIX . "order where order_id='$order_id'")->row;
-        if(!$data['waybill_id'] && $data['collivery_from_address_id'] && $data['collivery_to_address_id']){ //if waybill is not created
+        if($data['collivery_from_address_id'] && $data['collivery_to_address_id']){ //if waybill is not created
             $data_object = (object) $data;
             $quote['parcels'] = [];
             $quote['collivery_from'] = $data_object->collivery_from_address_id;
@@ -308,14 +308,11 @@ protected  $collivery_fields = array(
                 $data['quote_data'] = $validated_collivery_data;
                 $check = $this->db->query('select waybill_id from ' .DB_PREFIX . 'order where order_id="' . $data_object->order_id . '"')->row['waybill_id'];
                 if(!$check){
-                    if(!$check){
-                        $waybill_id = $this->collivery->addCollivery($validated_collivery_data);
-                        if($waybill_id){
-                            $this->db->query('update ' .DB_PREFIX . "order set `collivery_price_data`='". json_encode($validated_collivery_data)."', waybill_id='" . $waybill_id . "' where order_id='" . $data_object->order_id . "'");
-                            if($this->config->get('auto_accept_waybill')){
-                                $this->collivery->acceptCollivery($waybill_id);
-                            }
-                           $data['waybill_id'] = $waybill_id;
+                    $waybill_id = $this->collivery->addCollivery($validated_collivery_data);
+                    if($waybill_id){
+                        $this->db->query('update ' .DB_PREFIX . "order set `collivery_price_data`='". json_encode($validated_collivery_data)."', waybill_id='" . $waybill_id . "' where order_id='" . $data_object->order_id . "'");
+                        if($this->config->get('shipping_mds_auto_accept_waybill')){
+                            $this->collivery->acceptCollivery($waybill_id);
                         }
                     }
                 }
@@ -440,12 +437,6 @@ protected  $collivery_fields = array(
                 $data['waybill_enc'] = (string) base64_encode ($data['waybill_id']);
             }
         }
-
-        $data['shipping_collivery_town'] = $data['collivery_town'];
-        $data['shipping_collivery_location_type'] = $data['collivery_location_type'];
-        $data['shipping_collivery_suburb'] = $data['collivery_suburb'];
-
-
         /** @endcolivery-data */
                 ]]>
             </add>
@@ -728,22 +719,84 @@ protected  $collivery_fields = array(
     </file>
     <file path="admin/view/template/sale/order_form.twig">
         <operation>
+            <search>
+                <![CDATA[: $('a[href=\'#tab-shipping\']')]]>
+            </search>
+            <add position="replace">
+                <![CDATA[: $('a[href=\'#tab-mds\']')]]>
+            </add>
+        </operation>
+        <operation>
+            <search>
+                <![CDATA[$('#button-shipping-address').button('reset');]]>
+            </search>
+            <add position="replace">
+                <![CDATA[//$('#button-shipping-address').button('reset');]]>
+            </add>
+        </operation>
+        <operation>
             <search index="1">
                 <![CDATA[$('a[href=\'#tab-total\']').tab('show');]]>
             </search>
             <add position="replace">
                 <![CDATA[
-                //$('a[href=\'#tab-mds\']').tab('show');
-                    const colliveryElements = $(document).find('[name="shipping_collivery_town"], [name="shipping_collivery_suburb"], [name="shipping_collivery_location_type"]');
+                const colliveryElements = $(document).find('[name="shipping_collivery_town"], [name="shipping_collivery_suburb"], [name="shipping_collivery_location_type"]');
                       let errors = [];
                       colliveryElements.each(function() {
                             if(!$(this).val()){
                                 alert('Please select Town, Suburb and Location Type');
-                              errors.push('Data Missing');
+                              errors.push(`${$(this).attr('name')} missing!`);
                             }
                        });
                       if(!errors.length){
-                        $('#collivery-confirm-create-address-modal').modal('show');
+                        //$('#yes-create-mds-address').click();
+                        $.ajax({
+                              url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.user_token}&order_id={{ order_id }}`,
+                              method:'post',
+                              dataType: 'json',
+                              data : $('#tab-shipping').find('select, textarea, input').serialize()
+                            }).done(function(response){
+                                var waybill_id = response.waybill_id;
+                                var status = response.status;
+                                var pod = response.pod;
+                                var collivery_from = response.collivery_from;
+                                var collivery_to = response.collivery_to;
+                                var shipping_method = response.shipping_method;
+                                var html = `
+                                  <div class="row">
+                                    <div class="col-md-12">
+                                              <table class="table table-bordered">
+                                                  <tbody>
+                                                  <tr>
+                                                    <td colspan="8" class="text-center bg-info">Collivery Information</td>
+                                                  </tr>
+                                                  <tr>
+                                                      <td>Waybill ID</td>
+                                                      <td>Collivery Status</td>
+                                                      <td>POD</td>
+                                                      <td>Service Type</td>
+                                                      <td>Collection Address(Default Address)</td>
+                                                      <td>Delivery Address</td>
+                                                  </tr>
+                                                  <tr>
+                                                      <td>${waybill_id}</td>
+                                                      <td>${status}</td>
+                                                      <td>${pod}</td>
+                                                      <td>${shipping_method}</td>
+                                                      <td>${collivery_from}</td>
+                                                      <td>${collivery_to}</td>
+                                                  </tr>
+                                                  </tbody>
+                                              </table>
+                                          </div>
+                                        </div>
+                                `;
+
+                                $(document).find('#sub-tab-mds').html(html);
+                            }).always(function(){
+                                $('a[href="#tab-mds"]').tab('show');
+                                $('#button-shipping-address').button('reset');
+                            });
                       }
 
                 ]]>
@@ -793,184 +846,108 @@ protected  $collivery_fields = array(
             <add position="before">
                 <![CDATA[
             <div class="tab-pane" id="tab-mds">
-                  <div class="row">
-                      <div class="col-md-12 text-center">
-                          <h1 class="center">
-                              <img width="15%" class="float-right" src = "https://collivery.net/img/frontend/sliders/takealot-banner/collivery-logo.png" />
-                          </h1>
-                      </div>
-                  </div>
-                  <div id="sub-tab-mds">
-                  {% if is_mds %}
-                     <div class="row">
-                      <div class="col-md-12">
-                          <table class="table table-bordered">
-                              <tbody>
-                              <tr>
-                                  <td colspan="8" class="text-center bg-info">Collivery Information</td>
-                              </tr>
-                              <tr>
-                                  <td>Waybill ID</td>
-                                  <td>Collivery Status</td>
-                                  <td>POD</td>
-                                  <td>Service Type</td>
-                                  <td>Collection Address(Default Address)</td>
-                                  {% if collivery_delivery_address is not empty  %}
-
-                                      <td>Delivery Address</td>
-                                  {% else %}
-                                      <td>Town</td>
-                                      <td>Suburb</td>
-                                      <td>Location Type</td>
-                                  {% endif %}
-                              </tr>
-                              <tr>
-                                  <td>{{ waybill_id }}</td>
-                                  <td>{{  status }}</td>
-                                  <td>{{  pod }}</td>
-                                  <td>{{ waybill_service_name }}</td>
-                                  <td>{{ collivery_collection_address.nice_address }}</td>
-                                  {% if collivery_delivery_address is not empty %}
-                                      <td>{{ collivery_delivery_address.nice_address }}</td>
-                                  {% else %}
-                                      <td>{{ town }}</td>
-                                      <td>{{ suburb }}</td>
-                                      <td>{{ location_type }}</td>
-                                  {% endif %}
-                              </tr>
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
-                      {% if waybill_info %}
-                        <div class="row">
-                          <div class="col-md-12">
-                              <table class="table table-striped">
-                                  <thead>
-                                    <tr>
-                                        <td>Status</td>
-                                        <td>Delivery Date</td>
-                                        <td>ETA</td>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                  <tr>
-                                      <td>{{ waybill_info.status_text }}</td>
-                                      <td>{{ waybill_info.delivery_date }}</td>
-                                      <td>{{ waybill_info.eta_text }}</td>
-                                  </tr>
-                                  </tbody>
-                              </table>
-                          </div>
-                      </div>
-                      {% endif %}
-                        {% if not waybill_id|default  and addresses is not empty and false %}
-                          <div class="row">
-                              <div class="col-md-6">
-                                  <h6>Collection Address</h6>
-                                  <div class="well">
-                                      <div class="row" >
-                                          {{ collection_address.firstname ~ ' ' ~ collection_address.lastname }}<br>
-                                          {{ collection_address.company }}<br>
-                                          {{ collection_address.address_1 ~ ', ' ~ collection_address.address_2 ~ ' ' ~ collection_address.city }}<br>
-                                          {{ collection_address.postcode }}<br>
-                                      </div>
-                                      <div class="row">
-                                          <div class="col-md-12">
-                                              <hr/>
-                                              <h5>Change Address</h5>
-                                              <div class="form-group">
-                                                  <div class="col-lg-12">
-                                                      <label class="control-label" for="input-collection_shipping-address">
-                                                          {{ entry_address }}</label>
-                                                      <select name="collection_shipping_address_id" id="input_collection_shipping-address" class="form-control">
-                                                          {% for address in addresses %}
-                                                              <option value="{{ address.address_id }}">
-                                                                  {{ address.firstname }}
-                                                                  {{ address.lastname }} -
-                                                                  {{ address.company }}
-                                                                  {{ address.address_1 }},
-                                                                  {{ address.city }},
-                                                                  {{ address.postcode }},
-                                                              </option>
-                                                          {% endfor %}
-                                                      </select>
-                                                      <br>
-                                                      <a class="btn btn-default pull-left" href="index.php?route=sale/customer/edit&user_token={{ user_token }}&customer_id={{ collectionAddressId}}"><i class="icon-plus-circle"></i> Add Collection Address </a>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                              <div class="col-md-6">
-                                  <h6>Delivery Address</h6>
-                                  <div class="well">
-                                      <div class="row">
-                                          {{ delivery_address.firstname ~ ' ' ~ delivery_address.lastname }}<br>
-                                          {{ delivery_address.company }}<br>
-                                          {{ delivery_address.address_1 ~ ', ' ~ delivery_address.address_2 ~ ' ' ~ delivery_address.city }}<br>
-                                          {{ delivery_address.postcode }}<br>
-                                      </div>
-                                      <div class="row">
-                                          <div class="col-md-12">
-                                              <hr/>
-                                              <h5>Change Address</h5>
-                                              <div class="form-group">
-                                                  <div class="col-lg-12"><label class="control-label" for="input-delivery_shipping_address">
-                                                          {{ entry_address }}</label>
-                                                      <select name="delivery_shipping_address_id" id="input_delivery_shipping_address" class="form-control">
-                                                          {% for address_data in addresses %}
-                                                              {% if collection_address.address_id is same as(address_id) %}
-                                                                  {% set selected  = "selected" %}
-                                                              {% else %}
-                                                                  {% set selected  = "" %}
-
-                                                              {% endif %}
-                                                              <option value="{{ address_data.address_id }}">
-                                                                  {{ address_data.firstname }}
-                                                                  {{ address_data.lastname }} -
-                                                                  {{ address_data.company }} &nbsp;
-                                                                  {{ address_data.address_1 }},
-                                                                  {{ address_data.city }},
-                                                                  {{ address_data.postcode }},
-                                                              </option>
-                                                          {% endfor %}
-                                                      </select><br><a class="btn btn-default pull-left" href="index.php?route=sale/customer/edit&user_token={{ user_token }}&customer_id={{ customer_id }}"><i class="icon-plus-circle"></i> Add Delivery Address </a>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </div>
-                        {% endif %}
-                  {% else %}
-                      <div class="row">
-                          <div class="col-md-12">
-                              <br>
-                              <br>
-                              <h5 class="text-center text-info text-uppercase">Please not that the customer did not use Collivery.net shipping method</h5>
-                          </div>
-                      </div>
-                  {%  endif %}
-                  </div>
-                  <div class="row">
-
-                      <div {% if  not waybill_id and is_mds %} }} class="col-md-6 text-left" {% else %} class="col-md-6 text-left" {% endif %}>
-                          <button type="button"  class="btn btn-default"><i class="fa fa-arrow-left"></i>
-                              {{ button_back }}
-                          </button>
-                      </div>
-
-                      <div {% if  not waybill_id and is_mds %} }} class="col-md-6" {% else %} class="col-md-6" {% endif %}>
-                          <button type="button" id="button-mds-shipping" data-loading-text="{{ text_loading }}" class="pull-right btn btn-gray"><i class="fa fa-arrow-right"></i>
-                              {{ button_continue }}
-                          </button>
-                      </div>
-                  </div>
-
-              </div>
+   <div class="row">
+      <div class="col-md-12 text-center">
+         <img width="20%" alt="Collivery Logo" class="center" src="https://collivery.net/img/frontend/sliders/takealot-banner/collivery-logo.png" />
+         <hr/>
+      </div>
+   </div>
+   <div class="row">
+      <div class="col-md-4 text-left">
+         <h4>
+            Waybill No: <b>{{ waybill_id }}</b>
+         </h4>
+      </div>
+      <div class="col-md-4 text-center">
+         <h4>
+            Service Type: <b>{{ waybill_service_name }}</b>
+         </h4>
+      </div>
+      <div class="col-md-4 text-right">
+         <h4>
+            Waybill Status: <b>{{ waybill_info.status_text }}</b>
+         </h4>
+      </div>
+   </div>
+   <div id="sub-tab-mdsf">
+      {% if is_mds %}
+      <div class="row">
+         <div class="col-md-12">
+            <table class="table table-bordered">
+               <tbody>
+                  <tr>
+                     <td colspan="8" class="text-center text-uppercase bg-info">Collivery Information</td>
+                  </tr>
+                  <tr>
+                     <td class="text-center"><b>Collection Address</b></td>
+                     {% if collivery_delivery_address is not empty  %}
+                     <td class="text-center"><b>Delivery Address</b></td>
+                     {% else %}
+                     <td>Town</td>
+                     <td>Suburb</td>
+                     <td>Location Type</td>
+                     {% endif %}
+                  </tr>
+                  <tr>
+                     <td>{{ collivery_collection_address.nice_address }}</td>
+                     {% if collivery_delivery_address is not empty %}
+                     <td>{{ collivery_delivery_address.nice_address }}</td>
+                     {% else %}
+                     <td>{{ town }}</td>
+                     <td>{{ suburb }}</td>
+                     <td>{{ location_type }}</td>
+                     {% endif %}
+                  </tr>
+                  <tr>
+                     <td class="text-center text-uppercase bg-warning" colspan="9">Collivery Status</td>
+                  </tr>
+               </tbody>
+            </table>
+         </div>
+      </div>
+      <div class="row">
+         <div class="col-md-12">
+            <table class="table table-striped">
+               <thead>
+                  <tr>
+                     <td>Status</td>
+                     <td>Delivery Date</td>
+                     <td>ETA</td>
+                  </tr>
+               </thead>
+               <tbody>
+                  <tr>
+                     <td>{{ waybill_info.status_text }}</td>
+                     <td>{{ waybill_info.delivery_date }}</td>
+                     <td>{{ waybill_info.eta_text }}</td>
+                  </tr>
+               </tbody>
+            </table>
+         </div>
+      </div>
+      {% else %}
+      <div class="row">
+         <div class="col-md-12">
+            <br>
+            <br>
+            <h5 class="text-center text-info text-uppercase">Please not that the customer did not use Collivery.net shipping method</h5>
+         </div>
+      </div>
+      {%  endif %}
+   </div>
+   <div class="row">
+      <div {% if  not waybill_id and is_mds %} }} class="col-md-6 text-left" {% else %} class="col-md-6 text-left" {% endif %}>
+      <button onclick="$('select[name=\'shipping_method\']').prop('disabled') ? $('a[href=\'#tab-payment\']').tab('show') : $('a[href=\'#tab-shipping\']').tab('show');" type="button"  class="btn btn-default"><i class="fa fa-arrow-left"></i>
+      {{ button_back }}
+      </button>
+   </div>
+   <div {% if  not waybill_id and is_mds %} }} class="col-md-6" {% else %} class="col-md-6" {% endif %}>
+   <button type="button" id="button-mds-shipping" data-loading-text="{{ text_loading }}" class="pull-right btn btn-primary"><i class="fa fa-arrow-right"></i>
+   {{ button_continue }}
+   </button>
+</div>
+</div>
+</div>
                 ]]>
             </add>
         </operation>
@@ -996,23 +973,16 @@ protected  $collivery_fields = array(
                 <![CDATA[
                 <script type="text/javascript">
                     $(document)
-                    .ready(function(){
-                        $(document).find('[name="collivery_suburb"]').empty();
-                    })
                     .on('change', '[name="collivery_town"]', function(){
                         var townId = $(this).val();
-                        $('[name="collivery_suburb"]').empty();
-                        $.ajax({
-                            url: `index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`,
-                            type: 'get',
-                            success: function(respond) {
-                                $('[name="collivery_suburb"]').html(respond);
-                            },
-                            error: function(xhr, ajaxOptions, thrownError) {
+                        var url = `index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`;
+                        $.get(url)
+                            .done(function(response){
+                                $('[name="collivery_suburb"]').empty().html(response);
+                            }).fail(function(xhr, ajaxOptions, thrownError) {
                                 alert('Collivery suburbs could not be found!');
                                 console.log('Could not find collivery suburb, please check if this plugin is installed properly');
-                            }
-                        });
+                            });
                     });
                 </script>
                 ]]>
@@ -1156,15 +1126,13 @@ protected  $collivery_fields = array(
     .ready(function(){
       (function(fields){
         fields.map(function(item){
-          let select = $(document)
-                    .find(`select[name="shipping_${item}"]`);
-          let option;
+          let select = $(document).find(`select[name="shipping_${item}"]`), option;
           if(item === 'collivery_town'){
-            option = select.find("[value='{{ shipping_collivery_town_id }}']");
+            option = select.find("[value='{{ collivery_town }}']");
           }else if(item === 'collivery_suburb'){
-            option = select.find("[value='{{ shipping_collivery_suburb_id }}']");
+            option = select.find("[value='{{ collivery_suburb }}']");
           }else{
-            option = select.find("[value='{{ shipping_collivery_location_type_id }}']");
+            option = select.find("[value='{{ collivery_location_type }}']");
           }
           if(option){
             if(option.length){
@@ -1187,7 +1155,7 @@ protected  $collivery_fields = array(
     var to = $('[name="delivery_shipping_address_id"]').val();
     $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.user_token}&order=${order}&to=${to}&from=${from}`).done(function(response){
       if(response.hasOwnProperty('waybill_id')){
-        alert(response.waybill_id);
+        //alert(response.waybill_id);
       }
     })
     })
@@ -1238,8 +1206,10 @@ protected  $collivery_fields = array(
         $('a[href=\'#tab-total\']').tab('show');
     })
     .on('click', '#yes-create-mds-address', function(){
+        var url = `index.php?route=sale/order/createColliveryAddress&user_token=${window.user_token}&order_id={{ order_id }}`;
+
         $.ajax({
-          url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.user_token}&order_id={{ order_id }}`,
+          url : url,
           method:'post',
           dataType: 'json',
           data : $('#tab-shipping').find('select, textarea, input').serialize()
@@ -1344,9 +1314,11 @@ protected  $collivery_fields = array(
             <add position="before">
                 <![CDATA[
        /** @collivery-data **/
-        $location_types = $this->collivery->getLocationTypes();
-        $towns = $this->collivery->getTowns();
-        $suburbs = $this->collivery->getAllSuburbs();
+       if($this->collivery){
+            $location_types = $this->collivery->getLocationTypes();
+            $towns = $this->collivery->getTowns();
+            $suburbs = $this->collivery->getAllSuburbs();
+        }
        /** @endcollivery-data **/
                 ]]>
             </add>
