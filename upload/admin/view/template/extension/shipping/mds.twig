@@ -67,7 +67,7 @@
                     <div class="form-group required">
                         <label class="col-sm-2 control-label" for="input-demo"> <span data-toggle="tooltip">{{ entry_demo }}</span> </label>
                         <div class="col-sm-10">
-                            <select class="form-control" name="is_demo" id="input-demo">
+                            <select class="form-control" name="shipping_mds_is_demo" id="input-demo">
                                 <option {{ shipping_mds_is_demo == "0" ? 'selected' : ''}} value="0">{{ entry_no }}</option>
                                 <option {{ shipping_mds_is_demo == "1" ? 'selected' : ''}} value="1">{{ entry_yes }}</option>
                             </select>
@@ -76,16 +76,25 @@
                     <div class="form-group required">
                         <label class="col-sm-2 control-label" for="input-demo"> <span data-toggle="tooltip">{{ entry_auto_create_waybill }}</span> </label>
                         <div class="col-sm-10">
-                            <select class="form-control" name="auto_create_waybill" id="input-demo">
+                            <select class="form-control" name="shipping_mds_auto_create_waybill" id="input-demo">
                                 <option {{ shipping_mds_is_auto_create_waybill == "0" ? 'selected' : ''}} value="0">{{ entry_no }}</option>
                                 <option {{ shipping_mds_is_auto_create_waybill == "1" ? 'selected' : ''}} value="1">{{ entry_yes }}</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group required">
+                        <label class="col-sm-2 control-label" for="input-demo"> <span data-toggle="tooltip">{{ entry_auto_accept_waybill }}</span> </label>
+                        <div class="col-sm-10">
+                            <select class="form-control" name="shipping_mds_auto_accept_waybill" id="input-demo">
+                                <option {{ shipping_mds_is_auto_accept_waybill == "0" ? 'selected' : ''}} value="0">{{ entry_no }}</option>
+                                <option {{ shipping_mds_is_auto_accept_waybill == "1" ? 'selected' : ''}} value="1">{{ entry_yes }}</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group required">
                         <label class="col-sm-2 control-label" for="input-demo"> <span data-toggle="tooltip">{{ entry_auto_create_address }}</span> </label>
                         <div class="col-sm-10">
-                            <select class="form-control" name="auto_create_address" id="input-demo">
+                            <select class="form-control" name="shipping_mds_auto_create_address" id="input-demo">
                                 <option {{ shipping_mds_is_auto_create_address == "0" ? 'selected' : ''}} value="0">{{ entry_no }}</option>
                                 <option {{ shipping_mds_is_auto_create_address == "1" ? 'selected' : ''}} value="1">{{ entry_yes }}</option>
                             </select>
