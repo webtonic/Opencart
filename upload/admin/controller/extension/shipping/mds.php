@@ -174,8 +174,8 @@ class ControllerExtensionShippingMds extends Controller {
     public function install() {
 
         $errors = '';
-        if (version_compare(PHP_VERSION, '5.6') === 1) {
-            $errors .= 'MDS Collivery requires PHP 5.7 in order to run. Please upgrade before installing.' . PHP_EOL;
+        if (PHP_VERSION_ID <= 50500) {
+            $errors .= 'MDS Collivery requires PHP 5.6 in order to run. Please upgrade before installing.' . PHP_EOL;
         }
         if (!extension_loaded('soap')) {
             $errors .= 'MDS Collivery requires SOAP to be enabled on the server. Please make sure its enabled before installing.' . PHP_EOL;
@@ -183,7 +183,10 @@ class ControllerExtensionShippingMds extends Controller {
 
         if($errors){
             $this->log->write($errors);
-            die($errors);
+            $div = '<div class="col-md-12 alert alert-danger">
+                       ' . $errors . '
+                   </div>';
+            die($div);
         }
         $main_controller = DIR_SYSTEM . 'engine/controller.php';
         if(is_file($main_controller)){
