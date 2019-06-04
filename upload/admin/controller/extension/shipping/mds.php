@@ -12,9 +12,6 @@ class ControllerExtensionShippingMds extends Controller {
         $this->load->language('extension/shipping/mds');
         $this->load->model('setting/event');
         $this->load->model('setting/setting');
-
-
-
         $this->document->setTitle($this->language->get('heading_title'));
         if (strtoupper($this->request->server['REQUEST_METHOD']) === 'POST') {
             $this->model_setting_setting->editSetting('shipping_mds', $this->request->post);
@@ -22,10 +19,7 @@ class ControllerExtensionShippingMds extends Controller {
             $this->response->redirect($this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], 'SSL'));
         }
         $data             = $this->language->all();
-        $is_finish = isset($this->session->data['finish_collivery_installation']);
-        if($is_finish){
-            $data['finish_collivery_installation'] = true;
-        }
+
         $services         = $this->collivery->getServices();
         $data['services'] = $services;
         foreach ($services as $key => $service) {
@@ -69,10 +63,9 @@ class ControllerExtensionShippingMds extends Controller {
         } else {
             $data['error_password'] = '';
         }
-        if (isset($data['mdsErrors'])) {
-        } else {
-            $data['mdsErrors'] = '';
-        }
+
+        $data['mdsErrors'] = '';
+
         $data['breadcrumbs']   = array();
         $data['breadcrumbs'][] = array(
             'text' => $this->language->get('text_home'),
@@ -180,16 +173,16 @@ class ControllerExtensionShippingMds extends Controller {
 
     public function install() {
 
-
         $errors = '';
-        if (version_compare(PHP_VERSION, '5.3.0') < 0) {
-            $errors .= 'MDS Collivery requires PHP 5.3 in order to run. Please upgrade before installing.' . PHP_EOL;
+        if (version_compare(PHP_VERSION, '5.6') === 1) {
+            $errors .= 'MDS Collivery requires PHP 5.7 in order to run. Please upgrade before installing.' . PHP_EOL;
         }
         if (!extension_loaded('soap')) {
             $errors .= 'MDS Collivery requires SOAP to be enabled on the server. Please make sure its enabled before installing.' . PHP_EOL;
         }
 
         if($errors){
+            $this->log->write($errors);
             die($errors);
         }
         $main_controller = DIR_SYSTEM . 'engine/controller.php';
