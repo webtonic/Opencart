@@ -321,9 +321,20 @@ protected  $collivery_fields = array(
 
         $data = $this->db->query("select * from " . DB_PREFIX . "order where order_id='$order_id'")->row;
 
-        $response['waybill_id'] = $data['waybill_id'];
-        $response['waybill_status'] = 'STATUS';
-        $response['waybill_service'] = 'SERVICE';
+        $waybill_id = $data['waybill_id'];
+        $waybill_status = $this->collivery->getColliveryStatus($waybill_id);
+        $response['delivery_date'] = 'N/A';
+        $response['waybill_status'] = 'N/A';
+        if(is_array($waybill_status)){
+            if(array_key_exists('status_text', $waybill_status)){
+                $response['waybill_status'] = $waybill_status['status_text'];
+            }
+            if(array_key_exists('delivery_date', $waybill_status)){
+                $response['delivery_date'] = $waybill_status['delivery_date'];
+            }
+        }
+        $response['waybill_id'] = $waybill_id;
+        $response['waybill_service'] = $data['shipping_method'];
         $response['collivery_from'] = $this->collivery->getAddress($data['collivery_from_address_id'])['nice_address'];
         $response['collivery_to'] = $this->collivery->getAddress($data['collivery_to_address_id'])['nice_address'];
 
@@ -755,7 +766,7 @@ protected  $collivery_fields = array(
                               dataType: 'json',
                               data : $('#tab-shipping').find('select, textarea, input').serialize()
                             }).done(function(response){
-                                var { waybill_id : waybill_id, waybill_status : waybill_status, waybill_service : waybill_service, collivery_from : collivery_from, collivery_to : collivery_to} = response,
+                                var { waybill_id : waybill_id, waybill_status : waybill_status, waybill_service : waybill_service, collivery_from : collivery_from, collivery_to : collivery_to, delivery_date : delivery_date } = response,
              html = `
               <div class="row">
                           <div class="col-md-4 text-left">
@@ -770,7 +781,7 @@ protected  $collivery_fields = array(
                           </div>
                           <div class="col-md-4 text-right">
                               <h4>
-                                  Waybill Status: ${ waybill_status }<b></b>
+                                  Delivery Date : ${ delivery_date }<b></b>
                               </h4>
                           </div>
                       </div>
@@ -782,8 +793,8 @@ protected  $collivery_fields = array(
                                   <td colspan="8" class="text-center text-uppercase bg-info">Collivery Information</td>
                               </tr>
                               <tr>
-                                  <td class="text-center"><b>Collection Address</b></td>
-                                  <td class="text-center"><b>Delivery Address</b></td>
+                                  <td width="50%" class="text-center"><b>Collection Address</b></td>
+                                  <td width="50%" class="text-center"><b>Delivery Address</b></td>
                               </tr>
                               <tr>
                                   <td>${ collivery_from }</td>
@@ -1312,6 +1323,7 @@ protected  $collivery_fields = array(
                         }else{
                             $data_array = $suburbs;
                         }
+                        $custom_field_value_query->rows[] = array('custom_field_value_id' => 0, 'name' => 'Select ' . $custom_field['name']);
                         foreach ($data_array as $id => $name){
                             $custom_field_value_query->rows[] = array('custom_field_value_id' => $id, 'name' => $name);
                         }
