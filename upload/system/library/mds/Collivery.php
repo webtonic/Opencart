@@ -60,6 +60,33 @@ class Collivery
     }
 
     /**
+     * @param $method
+     * @param $args
+     *
+     * @return mixed
+     */
+    public function __call($method, $args)
+    {
+        //reset errors firs
+        $this->clearErrors();
+        //call the actual method
+        return call_user_func_array(array($this, $method), $args);
+    }
+
+    /**
+     * @return array
+     */
+    public function __invoke()
+    {
+        return array(
+           'locationTypes' => $this->getLocationTypes(),
+            'towns' => $this->getTowns(),
+        );
+    }
+
+
+
+    /**
      * @return bool
      */
     private function authenticate()
@@ -169,20 +196,15 @@ class Collivery
      */
     private function log($message = '')
     {
-        if (property_exists($this, 'log') && method_exists($this->log, 'message')) {
-            $this->log->message($message);
+        if (property_exists($this, 'log')) {
+            $this->log->write('Collivery Shipping Plugin: ' . $message);
         }
-    }
-
-    public function __destruct()
-    {
-        $this->clearErrors();
     }
 
     /**
      * @return $this
      */
-    public function clearErrors()
+    private function clearErrors()
     {
         $this->errors = [];
 
@@ -199,7 +221,7 @@ class Collivery
      *
      * @return array          List of towns and their ID's
      */
-    public function searchTowns($name)
+    private function searchTowns($name)
     {
         if (strlen($name) < 2) {
             return $this->get_towns();
@@ -257,7 +279,7 @@ class Collivery
      *
      * @return array|bool
      */
-    public function getAllSuburbs($town_id = null)
+    private function getAllSuburbs($town_id = null)
     {
 
         if ($this->check_cache && $this->cache->has('collivery.suburbs.' . $town_id)) {
@@ -296,7 +318,7 @@ class Collivery
      *
      * @return array|bool
      */
-    public function getAddresses(array $filter = [])
+    private function getAddresses(array $filter = [])
     {
 
         if ($this->check_cache && empty($filter) && $this->cache->has(
@@ -339,7 +361,7 @@ class Collivery
      *
      * @return array|bool
      */
-    public function getPod($collivery_id)
+    private function getPod($collivery_id)
     {
         if ($this->check_cache && $this->cache->has('collivery.pod.' . $this->client_id . '.' . $collivery_id)) {
             return $this->cache->get('collivery.pod.' . $this->client_id . '.' . $collivery_id);
@@ -383,7 +405,7 @@ class Collivery
      *
      * @return array|bool
      */
-    public function getParcelImageList($collivery_id)
+    private function getParcelImageList($collivery_id)
     {
         if ($this->check_cache && $this->cache->has(
                 'collivery.parcel_image_list.' . $this->client_id . '.' . $collivery_id
@@ -434,7 +456,7 @@ class Collivery
      *                             about the image including the image
      *                             itself in base64
      */
-    public function getParcelImage($parcel_id)
+    private function getParcelImage($parcel_id)
     {
         if ($this->check_cache && $this->cache->has(
                 'collivery.parcel_image.' . $this->client_id . '.' . $parcel_id
@@ -484,7 +506,7 @@ class Collivery
      *
      * @return bool|array                 Collivery Status Information
      */
-    public function getStatus($collivery_id)
+    private function getStatus($collivery_id)
     {
         if ($this->check_cache && $this->cache->has('collivery.status.' . $this->client_id . '.' . $collivery_id)) {
             return $this->cache->get('collivery.status.' . $this->client_id . '.' . $collivery_id);
@@ -526,7 +548,7 @@ class Collivery
      *
      * @return array
      */
-    public function addAddress(array $data)
+    private function addAddress(array $data)
     {
         $this->errors = [];
         $location_types = $this->getLocationTypes();
@@ -594,7 +616,7 @@ class Collivery
      *
      * @return array
      */
-    public function getLocationTypes()
+    private function getLocationTypes()
     {
         if ($this->check_cache && $this->cache->has('collivery.location_types')) {
             return $this->cache->get('collivery.location_types');
@@ -634,7 +656,7 @@ class Collivery
      *
      * @return array            List of towns and their ID's
      */
-    public function getTowns($country = "ZAF", $province = null)
+    private function getTowns($country = "ZAF", $province = null)
     {
         if (($this->check_cache) && is_null($province) && $this->cache->has('collivery.towns.' . $country)) {
             return $this->cache->get('collivery.towns.' . $country);
@@ -683,7 +705,7 @@ class Collivery
      *
      * @return array
      */
-    public function getSuburbs($town_id)
+    private function getSuburbs($town_id)
     {
         //api compatibility
         if (($this->check_cache) && $this->cache->has('collivery.suburbs.' . $town_id)) {
@@ -718,7 +740,7 @@ class Collivery
     /**
      * @return bool
      */
-    public function hasErrors()
+    private function hasErrors()
     {
         return !empty($this->errors);
     }
@@ -730,7 +752,7 @@ class Collivery
      *
      * @return int           New Contact ID
      */
-    public function addContact(array $data)
+    private function addContact(array $data)
     {
         if (!isset($data['address_id'])) {
             $this->setError('missing_data', 'address_id not set.');
@@ -781,7 +803,7 @@ class Collivery
      *
      * @return array               Address
      */
-    public function getAddress($address_id)
+    private function getAddress($address_id)
     {
         if (($this->check_cache) && $this->cache->has(
                 'collivery.address.' . $this->client_id . '.' . $address_id
@@ -822,7 +844,7 @@ class Collivery
     /**
      * @return array
      */
-    public function getDefaultAddress()
+    private function getDefaultAddress()
     {
         $default_address_id = $this->getDefaultAddressId();
 
@@ -838,7 +860,7 @@ class Collivery
      *
      * @return int Address ID
      */
-    public function getDefaultAddressId()
+    private function getDefaultAddressId()
     {
         if (!$this->default_address_id) {
             $this->authenticate();
@@ -854,7 +876,7 @@ class Collivery
      *
      * @return array
      */
-    public function getContacts($address_id)
+    private function getContacts($address_id)
     {
         if (($this->check_cache) && $this->cache->has(
                 'collivery.contacts.' . $this->client_id . '.' . $address_id
@@ -897,7 +919,7 @@ class Collivery
      *
      * @return array
      */
-    public function getPrice(array $data = [])
+    private function getPrice(array $data = [])
     {
         if ($this->validateGetPriceData()) {
             return $this->client()->get_price($data, $this->token);
@@ -911,7 +933,7 @@ class Collivery
      *
      * @return bool
      */
-    public function validateGetPriceData(array $data = [])
+    private function validateGetPriceData(array $data = [])
     {
         if (!isset($data['collivery_from']) && !isset($data['from_town_id'], $data['from_location_type'])) {
             $this->setError('missing_data', 'Please set collection address');
@@ -949,7 +971,7 @@ class Collivery
      *
      * @return array         The validated data
      */
-    public function validate(array $data)
+    private function validate(array $data)
     {
         $contacts_from = $this->getContacts($data['collivery_from']);
         $contacts_to = $this->getContacts($data['collivery_to']);
@@ -1024,7 +1046,7 @@ class Collivery
      *
      * @return array  Parcel  Types
      */
-    public function getParcelTypes()
+    private function getParcelTypes()
     {
         if (($this->check_cache) && $this->cache->has('collivery.parcel_types')) {
             return $this->cache->get('collivery.parcel_types');
@@ -1060,7 +1082,7 @@ class Collivery
      *
      * @return array
      */
-    public function getServices()
+    private function getServices()
     {
         if (($this->check_cache) && $this->cache->has('collivery.services')) {
             return $this->cache->get('collivery.services');
@@ -1096,7 +1118,7 @@ class Collivery
      *
      * @return string|bool
      */
-    public function addCollivery(array $data)
+    private function addCollivery(array $data)
     {
         $this->errors = [];
         $contacts_from = $this->getContacts($data['collivery_from']);
@@ -1175,7 +1197,7 @@ class Collivery
      *
      * @return boolean                 Has the Collivery been accepted
      */
-    public function acceptCollivery($collivery_id)
+    private function acceptCollivery($collivery_id)
     {
         try {
             $result = $this->client()->accept_collivery($collivery_id, $this->token);
@@ -1205,7 +1227,7 @@ class Collivery
     /**
      * @return array
      */
-    public function getErrors()
+    private function getErrors()
     {
         return $this->errors;
     }
@@ -1213,7 +1235,7 @@ class Collivery
     /**
      * Disable Cached completely and retrieve data directly from the webservice
      */
-    public function disableCache()
+    private function disableCache()
     {
         $this->check_cache = false;
     }
@@ -1222,7 +1244,7 @@ class Collivery
      * Ignore Cached data and retrieve data directly from the webservice
      * Save returned data to Cache
      */
-    public function ignoreCache()
+    private function ignoreCache()
     {
         $this->check_cache = 1;
     }
@@ -1231,7 +1253,7 @@ class Collivery
      * Check if cache exists before querying the webservice
      * If webservice was queried, save returned data to Cache
      */
-    public function enableCache()
+    private function enableCache()
     {
         $this->check_cache = 2;
     }
@@ -1241,7 +1263,7 @@ class Collivery
      *
      * @return bool
      */
-    public function getColliveryStatus($waybillId)
+    private function getColliveryStatus($waybillId)
     {
         $this->errors = [];
 
