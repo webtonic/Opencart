@@ -301,8 +301,8 @@ protected  $collivery_fields = array(
             $quote['contact_to'] = $data_object->collivery_to_contact_id;
             $quote['service'] = $service_type_id;
             $quote['collivery_type'] = 2; //package
-            $quote['cover'] = 0;
-            $quote['rica'] = 0;
+            $quote['cover'] = $this->config->get('mds_shipping_cover');
+            $quote['rica'] = $this->config->get('mds_shipping_rica');
             $validated_collivery_data = $this->collivery->validate($quote);
             if($validated_collivery_data){
                 $data['quote_data'] = $validated_collivery_data;
@@ -422,8 +422,8 @@ protected  $collivery_fields = array(
                 $quote['contact_to'] = $data_object->collivery_to_contact_id;
                 $quote['service'] = $service_type_id;
                 $quote['collivery_type'] = 2; //package
-                $quote['cover'] = 0;
-                $quote['rica'] = 0;
+                $quote['cover'] = $this->config->get('mds_shipping_cover');
+                $quote['rica'] = $this->config->get('mds_shipping_rica');
                 $validated_collivery_data = $this->collivery->validate($quote);
                 if($validated_collivery_data){
                     $data['quote_data'] = $validated_collivery_data;
