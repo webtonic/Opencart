@@ -7,6 +7,46 @@
     <link>http://www.collivery.co.za</link>
     <!-- CONTROLLERS -->
     <!-- Admin Controllers -->
+    <file path="system/engine/controller.php">
+        <operation>
+            <search>
+                <![CDATA[public function __get($key) {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+        if(!$this->registry->has('collivery')){
+            $collivery_query = $this->registry->get('db')->query("select u.value as username, p.value as password, d.value as is_demo from " . DB_PREFIX . "setting as p left join " . DB_PREFIX . "setting as u on(u.code=p.code) left join " . DB_PREFIX . "setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'");
+            $demo_auth = array('username' => 'api@collivery.co.za', 'password' => 'api123', 'is_demo' => true);
+            if($collivery_query->num_rows && !((bool) $collivery_query->row['is_demo'])){
+                list('username' => $username, 'password' => $password, 'is_demo'=> $is_demo) = $collivery_query->row;
+            }else{
+                list('username' => $username, 'password' => $password, 'is_demo' => $is_demo) = $demo_auth;
+            }
+            $config = array(
+                'log' => $this->registry->get('log'),
+                'app_name' => 'Collivery_net/Opencart',
+                'app_version' => '1.0.1',
+                'app_host' => 'Opencart ' . VERSION,
+                'app_url' => $_SERVER['HTTP_HOST'],
+                'user_email' => $username ,
+                'user_password' => $password,
+                'demo' => (bool) $is_demo
+            );
+
+            foreach ($config as $_key => $value){
+                $this->registry->set('collivery_config_' . $_key, $value);
+            }
+            $collivery_library = DIR_SYSTEM . 'library/mds/Collivery.php';
+            if(is_file($collivery_library)){
+                include_once $collivery_library;
+                $this->registry->set('collivery', new \Mds\Collivery($config));
+            }
+            /** @endcollivery-config */
+        }
+                ]]>
+            </add>
+        </operation>
+    </file>
     <file path="catalog/model/checkout/order.php">
         <operation>
             <search>
