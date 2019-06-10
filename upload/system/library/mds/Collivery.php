@@ -1,16 +1,19 @@
 <?php namespace Mds;
 
-use SoapClient; // Use PHP Soap Client
-use SoapFault;  // Use PHP Soap Fault
-use Cache;
+use SoapClient;
+use SoapFault;
+
+// Use PHP Soap Client
+// Use PHP Soap Fault
 
 class Collivery
 {
+    const ENDPOINT = 'http://ops.local/webservice.php?wsdl';
     protected $token;
     protected $client;
     protected $config;
     protected $errors = [];
-    protected $check_cache = true;
+    protected $cacheEnabled = true;
     protected $default_address_id;
     protected $client_id;
     protected $user_id;
@@ -25,10 +28,9 @@ class Collivery
      */
     public function __construct(array $config = [], $cache = null)
     {
-        include_once 'Cache.php';
         if ($cache === null) {
             $cache_dir = array_key_exists('cache_dir', $config) ? $config['cache_dir'] : null;
-            $this->cache = new \Mds\Cache($cache_dir);
+            $this->cache = new Cache($cache_dir);
         } else {
             $this->cache = $cache;
         }
@@ -45,7 +47,7 @@ class Collivery
         }
 
         if ($this->demo) {
-            $this->user_email = 'api@collivery.co.za';
+            $this->user_email = 'api@co.za';
             $this->user_password = 'api123';
         }
     }
@@ -86,54 +88,51 @@ class Collivery
     }
 
     /**
-     * @return Collivery
+     * @return $this|array
      */
     protected function init()
     {
         if (!$this->client) {
             try {
                 $this->client = new SoapClient( // Setup the soap client
-                    'http://ops.collivery.local/webservice.php?wsdl', // URL to WSDL File
+                    self::ENDPOINT, // URL to WSDL File
                     ['cache_wsdl' => WSDL_CACHE_NONE] // Don't cache the WSDL file
                 );
             } catch (SoapFault $e) {
                 $this->catchSoapFault($e);
+                $this->setError('client', "Cannot initialize Soap client :{$e->getMessage()}");
             }
         }
 
-        return $this;
+        return $this->errorsOrResults($this);
     }
 
     /**
      * @param SoapFault $e
-     *
-     * @return array
      */
     protected function catchSoapFault(SoapFault $e)
     {
-        return $this->setError($e->faultcode, $e->faultstring . ' -> ' . $e->getMessage());
+        $this->setError($e->faultcode, $e->faultstring . ' -> ' . $e->getMessage());
     }
 
     /**
-     * @param $id
-     * @param $text
+     * @param        $id
+     * @param string $text
      *
-     * @return array
+     * @return $this
      */
     protected function setError($id, $text = '')
     {
-        if(is_array($id) && !empty($id)){
-            foreach ($id as $key => $val){
-                if(!next($id)){
-                    return $this->setError($key, $val);
-                }
+        if (is_array($id) && !empty($id)) {
+            foreach ($id as $key => $val) {
                 $this->setError($key, $val);
             }
+        } elseif (is_string($id) || is_int($id)) {
+            $this->log(json_encode(['id' => $id, 'message' => $text]));
+            $this->errors[$id] = $text;
         }
-        $this->errors[$id] = $text;
-        $this->log("{id : $id, message : $text}");
 
-        return $this->errors;
+        return $this;
     }
 
     /**
@@ -147,37 +146,61 @@ class Collivery
     }
 
     /**
+     * @param $results
+     *
+     * @return array
+     */
+    private function errorsOrResults($results)
+    {
+        if ($this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        return $results;
+    }
+
+    /**
      * @return bool
+     */
+    private function hasErrors()
+    {
+        return !empty($this->errors);
+    }
+
+    /**
+     * @return array
+     */
+    private function getErrors()
+    {
+        return $this->errors;
+    }
+
+    /**
+     * @return $this
      */
     private function authenticate()
     {
-        $cacheKey = 'collivery.auth';
+        $cacheKey = 'auth';
         $auth = $this->getCache($cacheKey);
-        if($this->check_cache && $auth && $auth['user_email'] === strtolower($this->user_email)){
+        if ($this->cacheEnabled && $auth && $auth['user_email'] === strtolower($this->user_email)) {
             $this->default_address_id = $auth['default_address_id'];
             $this->client_id = $auth['client_id'];
             $this->user_id = $auth['user_id'];
             $this->token = $auth['token'];
-            return true;
-        }
-
-
-        if (!$this->init()) {
-            return false;
         }
 
         $user_email = strtolower($this->user_email);
         $user_password = $this->user_password;
-        $config = array(
+        $config = [
             'name'    => $this->app_name . ' mds/collivery/class',
             'version' => $this->app_version,
             'host'    => $this->app_host,
             'url'     => $this->app_url,
             'lang'    => 'PHP ' . PHP_VERSION,
-        );
-        $authenticate = $this->sendSoapRequest('authenticate', array($user_email, $user_password, $this->token, $config));
+        ];
+        $authenticate = $this->sendSoapRequest('authenticate', [$user_email, $user_password, $this->token, $config]);
         if (is_array($authenticate) && isset($authenticate['token'])) {
-            if ($this->check_cache) {
+            if ($this->cacheEnabled) {
                 $this->setCache($cacheKey, $authenticate, 50);
             }
 
@@ -185,31 +208,64 @@ class Collivery
             $this->client_id = $authenticate['client_id'];
             $this->user_id = $authenticate['user_id'];
             $this->token = $authenticate['token'];
-
-            return true;
         }
 
-        return false;
+        return $this;
     }
-
 
     /**
-     * Checks if the Soap Client has been set, and returns it.
+     * @param $name
      *
-     * @return  SoapClient  Webserver Soap Client
+     * @return null
      */
-    protected function client()
+    private function getCache($name)
     {
-        if (!$this->client) {
-            $this->init();
+        $name = strtolower($name);
+        if ($this->cacheEnabled && $this->cache->has($name)) {
+            return $this->cache->get($name);
         }
 
-        if (!$this->token) {
-            $this->authenticate();
-        }
-
-        return $this->client;
+        return null;
     }
+    /**
+     * @param     $key
+     * @param     $value
+     * @param int $ttl
+     *
+     * @return mixed
+     */
+    private function setCache($key, $value, $ttl = 10080)
+    {
+        $key = strtolower("collivery_shipping_plugin_cache_.{$key}");
+
+        return $this->cache->put($key, $value, $ttl);
+    }
+
+    /**
+     * @param       $method
+     * @param array $params
+     *
+     * @return array
+     */
+    private function sendSoapRequest($method, array $params = [])
+    {
+        if (!in_array($this->token, $params, true)) {
+            $params[] = $this->token;
+        }
+        try {
+            if (!($this->client && $this->token)) {
+                $request = $this->init()->authenticate()->client;
+            } else {
+                $request = $this->client;
+            }
+
+            return $request->{$method}(...$params);
+        } catch (SoapFault $e) {
+            return $this->catchSoapFault($e);
+        }
+    }
+
+
 
     /**
      * Returns all the suburbs of a town.
@@ -220,219 +276,109 @@ class Collivery
      */
     private function getAllSuburbs($town_id = null)
     {
+        $cacheKey = 'suburbs.' . $town_id;
+        $suburbs = $this->getCache($cacheKey);
 
-        if ($this->check_cache && $this->cache->has('collivery.suburbs.' . $town_id)) {
-            return $this->cache->get('collivery.suburbs.' . $town_id);
+        if ($suburbs) {
+            return $suburbs;
         }
 
-        try {
-            $result = $this->client()->get_all_suburbs($town_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['suburbs'])) {
-            if ($this->check_cache) {
-                $this->cache->put('collivery.suburbs.' . $town_id, $result['suburbs'], 10080);
-            }
-
-            return $result['suburbs'];
-        }
+        $result = $this->sendSoapRequest('get_all_suburbs');
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
-        } else {
+        }
+
+        if (!isset($result['suburbs'])) {
             $this->setError('result_unexpected', 'No result returned.');
         }
 
-        return false;
+        $suburbs = $result['suburbs'];
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $suburbs);
+        }
+
+        return $this->errorsOrResults($suburbs);
     }
 
     /**
-     * Returns all the addresses belonging to a client.
+     * @param array $filter
      *
-     * @param array $filter Filter Addresses
-     *
-     * @return array|bool
+     * @return array|mixed|null
      */
     private function getAddresses(array $filter = [])
     {
-        $cacheKey = 'collivery.addresses.' . $this->client_id;
+        $cacheKey = 'addresses.' . $this->client_id;
         $addresses = $this->getCache($cacheKey);
-        if($addresses){
+        if ($addresses) {
             return $addresses;
         }
 
-
-
-        try {
-            $result = $this->client()->get_addresses($this->token, $filter);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['addresses'])) {
-            if (empty($filter)) {
-                $this->cache->put('collivery.addresses.' . $this->client_id, $result['addresses'], 60 * 24);
-            }
-
-            return $result['addresses'];
-        }
+        $result = $this->sendSoapRequest('get_addresses', [$this->token, $filter]);
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
-        } else {
+        }
+
+        if (!isset($result['addresses'])) {
             $this->setError('result_unexpected', 'No address_id returned.');
         }
 
-        return false;
+        $addresses = $result['addresses'];
+
+        if ($this->cacheEnabled && empty($filter)) {
+            $this->setCache($cacheKey, $addresses);
+        }
+
+        return $this->errorsOrResults($addresses);
     }
 
     /**
-     * Returns the POD image for a given Waybill Number.
+     * @param $colliveryId
      *
-     * @param int $collivery_id Collivery waybill number
-     *
-     * @return array|bool
+     * @return array|mixed|null
      */
-    private function getPod($collivery_id)
+    private function getPod($colliveryId)
     {
-        if ($this->check_cache && $this->cache->has('collivery.pod.' . $this->client_id . '.' . $collivery_id)) {
-            return $this->cache->get('collivery.pod.' . $this->client_id . '.' . $collivery_id);
+        $cacheKey = 'pod.' . $this->client_id . '.' . $colliveryId;
+        $pod = $this->getCache($cacheKey);
+        if ($pod) {
+            return $pod;
         }
 
-        try {
-            $result = $this->client()->get_pod($collivery_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['pod'])) {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } elseif ($this->check_cache) {
-                $this->cache->put(
-                    'collivery.pod.' . $this->client_id . '.' . $collivery_id,
-                    $result['pod'],
-                    1440
-                );
-            }
-
-            return $result['pod'];
-        }
+        $result = $this->sendSoapRequest('get_pod', [$colliveryId]);
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
-        } else {
-            $this->setError('result_unexpected', 'No result returned.');
         }
 
-        return false;
+        if (!isset($result['pod'])) {
+            $this->setError('no results', "No POD returned for waybill {$colliveryId}");
+        }
+
+        $pod = $result['pod'];
+
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $pod);
+        }
+
+        return $this->errorsOrResults($pod);
     }
+
+
 
     /**
-     * Returns a list of avaibale parcel images for a given Waybill Number.
-     *
-     * @param int $collivery_id Collivery waybill number
-     *
-     * @return array|bool
+     * @return array
      */
-    private function getParcelImageList($collivery_id)
+    protected function client()
     {
-        if ($this->check_cache && $this->cache->has(
-                'collivery.parcel_image_list.' . $this->client_id . '.' . $collivery_id
-            )
-        ) {
-            return $this->cache->get('collivery.parcel_image_list.' . $this->client_id . '.' . $collivery_id);
+        if (!$this->client) {
+            $this->init();
         }
 
-        try {
-            $result = $this->client()->get_parcel_image_list($collivery_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['images'])) {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } elseif ($this->check_cache) {
-                $this->cache->put(
-                    'collivery.parcel_image_list.' . $this->client_id . '.' . $collivery_id,
-                    $result['images'],
-                    60 * 12
-                );
-            }
-
-            return $result['images'];
-        }
-
-        if (isset($result['error_id'])) {
-            $this->setError($result['error_id'], $result['error']);
-        } else {
-            $this->setError('result_unexpected', 'No result returned.');
-        }
-
-        return false;
+        return $this->errorsOrResults($this->client);
     }
 
-    /**
-     * Returns the image of a given parcel-id of a waybill.
-     * If the Waybill number is 54321 and there are 3 parcels, they would
-     * be referenced by id's 54321-1, 54321-2 and 54321-3.
-     *
-     * @param string $parcel_id Parcel ID
-     *
-     * @return bool|array               Array containing all the information
-     *                             about the image including the image
-     *                             itself in base64
-     */
-    private function getParcelImage($parcel_id)
-    {
-        if ($this->check_cache && $this->cache->has(
-                'collivery.parcel_image.' . $this->client_id . '.' . $parcel_id
-            )
-        ) {
-            return $this->cache->get('collivery.parcel_image.' . $this->client_id . '.' . $parcel_id);
-        }
-
-        try {
-            $result = $this->client()->get_parcel_image($parcel_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['image'])) {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } elseif ($this->check_cache) {
-                $this->cache->put(
-                    'collivery.parcel_image.' . $this->client_id . '.' . $parcel_id,
-                    $result['image'],
-                    1440
-                );
-            }
-
-            return $result['image'];
-        }
-
-        if (isset($result['error_id'])) {
-            $this->setError($result['error_id'], $result['error']);
-        } else {
-            $this->setError('result_unexpected', 'No result returned.');
-        }
-
-        return false;
-    }
 
     /**
      * Returns the status tracking detail of a given Waybill number.
@@ -446,39 +392,30 @@ class Collivery
      */
     private function getStatus($collivery_id)
     {
-        if ($this->check_cache && $this->cache->has('collivery.status.' . $this->client_id . '.' . $collivery_id)) {
-            return $this->cache->get('collivery.status.' . $this->client_id . '.' . $collivery_id);
+        $cacheKey = 'status.' . $this->client_id . $collivery_id;
+        $status = $this->getCache($cacheKey);
+        if($status){
+            return $status;
         }
 
-        try {
-            $result = $this->client()->get_collivery_status($collivery_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
-        }
-
-        if (isset($result['status_id'])) {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } elseif ($this->check_cache) {
-                $this->cache->put(
-                    'collivery.status.' . $this->client_id . '.' . $collivery_id,
-                    $result,
-                    60 * 12
-                );
-            }
-
-            return $result;
-        }
+        $result = $this->sendSoapRequest('get_collivery_status', array($collivery_id));
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
-        } else {
+        }
+
+        if(!isset($result['status_id'])) {
             $this->setError('result_unexpected', 'No result returned.');
         }
 
-        return false;
+        $result = $result['status_id'];
+
+        if($this->cacheEnabled){
+            $this->setCache($cacheKey, $result);
+        }
+
+        return $this->errorsOrResults($result);
+
     }
 
     /**
@@ -523,172 +460,127 @@ class Collivery
             $this->setError('missing_data', 'Please supply ether a phone or cellphone number...');
         }
 
+
         if (!$this->hasErrors()) {
-            try {
-                $result = $this->client()->add_address($data, $this->token);
-                $this->cache->forget('collivery.addresses.' . $this->client_id);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return ['soap_exception' => $e->getMessage(), 'errors' => $this->errors];
-            }
-
-            if (isset($result['address_id'])) {
-                return $result;
-            }
+            $result = $this->sendSoapRequest('add_address', array($data));
 
             if (isset($result['error_id'])) {
                 $this->setError($result['error_id'], $result['error']);
-            } else {
-                $this->setError('result_unexpected', 'No address_id returned.');
             }
 
-            return $this->errors;
+            if (!isset($result['address_id'])) {
+                $this->setError('no address added', 'The address could not be added, data validated successfully, error ID not set');
+            }
+
+
+            $addressId = $result['address_id'];
+
+            return $this->errorsOrResults($addressId);
+
         }
+
+        return $this->getErrors();
     }
 
     /**
-     * Returns the type of Address Locations.
-     * Certain location type incur a surcharge due to time spent during
-     * delivery.
-     *
-     * @return array
+     * @return array|mixed|null
      */
     private function getLocationTypes()
     {
-        if ($this->check_cache && $this->cache->has('collivery.location_types')) {
-            return $this->cache->get('collivery.location_types');
+        $cacheKey = 'location_types';
+        $locationTypes = $this->getCache($cacheKey);
+        if ($locationTypes) {
+            return $locationTypes;
         }
 
-        try {
-            $result = $this->client()->get_location_types($this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
+        $result = $this->sendSoapRequest('get_location_types');
 
-            return false;
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
         }
 
-        if (isset($result['results'])) {
-            if ($this->check_cache) {
-                $this->cache->put('collivery.location_types', $result['results'], 10080);
-            }
-
-            return $result['results'];
-        } else {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } else {
-                $this->setError('result_unexpected', 'No results returned.');
-            }
-
-            return false;
+        if (!isset($result['results'])) {
+            $this->setError('no_results', 'No results returned');
         }
+
+        $locationTypes = $result['results'];
+
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $locationTypes);
+        }
+
+        return $this->errorsOrResults($locationTypes);
     }
 
     /**
-     * Returns a list of towns and their ID's for creating new addresses.
-     * Town can be filtered by country of province (ZAF Only).
+     * @param string $country
+     * @param null   $province
      *
-     * @param string $country  Filter towns by Country
-     * @param string $province Filter towns by South African Provinces
-     *
-     * @return array            List of towns and their ID's
+     * @return array|mixed|null
      */
-    private function getTowns($country = "ZAF", $province = null)
+    private function getTowns($country = 'zaf', $province = null)
     {
-        if (($this->check_cache) && is_null($province) && $this->cache->has('collivery.towns.' . $country)) {
-            return $this->cache->get('collivery.towns.' . $country);
-        } elseif (($this->check_cache) && !is_null($province) && $this->cache->has(
-                'collivery.towns.' . $country . '.' . $province
-            )
-        ) {
-            return $this->cache->get('collivery.towns.' . $country . '.' . $province);
-        } else {
-            try {
-                $result = $this->client()->get_towns($this->token, $country, $province);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
+        $cacheKey = 'towns.' . strtolower($country . ($province ? ".{$province}" : ''));
 
-                return false;
-            }
+        $towns = $this->getCache($cacheKey);
 
-            if (isset($result['towns'])) {
-                if (is_null($province)) {
-                    if ($this->check_cache) {
-                        $this->cache->put('collivery.towns.' . $country, $result['towns'], 60 * 24);
-                    }
-                } else {
-                    if ($this->check_cache) {
-                        $this->cache->put('collivery.towns.' . $country . '.' . $province, $result['towns'], 60 * 24);
-                    }
-                }
-
-                return $result['towns'];
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No result returned.');
-                }
-
-                return false;
-            }
+        if ($towns) {
+            return $towns;
         }
+
+        $result = $this->sendSoapRequest('get_towns', [$this->token, $country, $province]);
+
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
+        }
+
+        if (!isset($result['towns'])) {
+            $this->setError('no_results', 'No results returned by the server');
+        }
+
+        $towns = $result['towns'];
+
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $towns);
+        }
+
+        return $this->errorsOrResults($towns);
     }
 
     /**
-     * Returns all the suburbs of a town.
+     * @param $town_id
      *
-     * @param int $town_id ID of the Town to return suburbs for
-     *
-     * @return array
+     * @return array|mixed|null
      */
     private function getSuburbs($town_id)
     {
-        //api compatibility
-        if (($this->check_cache) && $this->cache->has('collivery.suburbs.' . $town_id)) {
-            return $this->cache->get('collivery.suburbs.' . $town_id);
-        } else {
-            try {
-                $result = $this->client()->get_suburbs($town_id, $this->token);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return false;
-            }
-
-            if (isset($result['suburbs'])) {
-                if ($this->check_cache) {
-                    $this->cache->put('collivery.suburbs.' . $town_id, $result['suburbs'], 10080);
-                }
-
-                return $result['suburbs'];
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No result returned.');
-                }
-
-                return false;
-            }
+        $cacheKey = 'suburbs.' . $town_id;
+        $suburbs = $this->getCache($cacheKey);
+        if ($suburbs) {
+            return $suburbs;
         }
+
+        $result = $this->sendSoapRequest('get_suburbs', [$town_id]);
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
+        }
+
+        if (!isset($result['suburbs'])) {
+            $this->setError('no_results', 'No suburbs returned by the server');
+        }
+
+        $suburbs = $result['suburbs'];
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $suburbs);
+        }
+
+        return $this->errorsOrResults($suburbs);
     }
 
     /**
-     * @return bool
-     */
-    private function hasErrors()
-    {
-        return !empty($this->errors);
-    }
-
-    /**
-     * Add's a contact person for a given Address ID
+     * @param array $data
      *
-     * @param array $data New Contact Data
-     *
-     * @return int           New Contact ID
+     * @return $this|array
      */
     private function addContact(array $data)
     {
@@ -702,7 +594,7 @@ class Collivery
             $this->setError('missing_data', 'full_name not set.');
         }
 
-        if (!isset($data['phone']) and !isset($data['cellphone'])) {
+        if (!isset($data['phone']) && !isset($data['cellphone'])) {
             $this->setError('missing_data', 'Please supply ether a phone or cellphone number...');
         }
 
@@ -710,72 +602,64 @@ class Collivery
             $this->setError('missing_data', 'email not set.');
         }
 
-        if (!$this->hasErrors()) {
-            try {
-                $result = $this->client()->add_contact($data, $this->token);
-                $this->cache->forget('collivery.addresses.' . $this->client_id);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
+        $result = $this->sendSoapRequest('add_contact', [$data]);
 
-                return false;
-            }
+        $this->removeCache('addresses.' . $this->client_id);
 
-            if (isset($result['contact_id'])) {
-                return $result;
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No contact_id returned.');
-                }
-
-                return false;
-            }
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
         }
+
+        if ($this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        return $this;
     }
 
     /**
-     * Returns the available Parcel Type ID and value array for use in adding a collivery.
+     * @param $address_id
      *
-     * @param int $address_id The ID of the address you wish to retrieve.
-     *
-     * @return array               Address
+     * @return array|mixed|null
      */
     private function getAddress($address_id)
     {
-        $cacheKey = 'collivery.address.' . $this->client_id . '.' . $address_id;
+        $cacheKey = 'address.' . $this->client_id . '.' . $address_id;
         $address = $this->getCache($cacheKey);
-        if($address){
+        if ($address) {
             return $address;
         }
 
+        $result = $this->sendSoapRequest('get_address', [$address_id]);
 
-        try {
-            $result = $this->client()->get_address($address_id, $this->token);
-
-            if (isset($result['address'])) {
-                list('address' => $address) = $result['address'];
-                if ($this->check_cache) {
-                    $this->setCache($cacheKey, $address);
-                }
-
-                return $address;
-            }
-
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } else {
-                $this->setError('result_unexpected', 'No address_id returned.');
-            }
-
-            return false;
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-
-            return false;
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
         }
 
+        if(!isset($result['address'])){
+            $this->setError('no results', 'No results return for getting an address');
+        }
 
+        list('address' => $address) = $result;
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $address);
+        }
+
+        return $this->errorsOrResults($address);
+    }
+
+    /**
+     * @param $key
+     *
+     * @return bool
+     */
+    public function removeCache($key)
+    {
+        if ($this->getCache($key)) {
+            $this->cache->forget($key);
+        }
+
+        return !$this->getCache($key);
     }
 
     /**
@@ -807,51 +691,31 @@ class Collivery
     }
 
     /**
-     * Returns the Contact people of a given Address ID.
+     * @param $address_id
      *
-     * @param int $address_id Address ID
-     *
-     * @return array
+     * @return array|mixed|null
      */
     private function getContacts($address_id)
     {
-        if (($this->check_cache) && $this->cache->has(
-                'collivery.contacts.' . $this->client_id . '.' . $address_id
-            )
-        ) {
-            return $this->cache->get('collivery.contacts.' . $this->client_id . '.' . $address_id);
-        } else {
-            try {
-                $result = $this->client()->get_contacts($address_id, $this->token);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return false;
-            }
-
-            if (isset($result['contacts'])) {
-                if ($this->check_cache) {
-                    $this->cache->put(
-                        'collivery.contacts.' . $this->client_id . '.' . $address_id,
-                        $result['contacts'],
-                        60 * 24
-                    );
-                }
-
-                return $result['contacts'];
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No result returned.');
-                }
-
-                return false;
-            }
+        $cacheKey = 'contacts.' . $this->client_id . '.' . $address_id;
+        $contacts = $this->getCache($cacheKey);
+        if ($this->cacheEnabled && $contacts) {
+            return $contacts;
         }
+
+        $result = $this->sendSoapRequest('get_contact', [$address_id]);
+
+        if (isset($result['error_id'])) {
+            return $this->setError($result['error_id'], $result['error']);
+        }
+
+        $contacts = $result['contacts'];
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $contacts);
+        }
+
+        return $contacts;
     }
-
-
 
     /**
      * @param array $data
@@ -884,7 +748,7 @@ class Collivery
 
     /**
      * Validate Collivery
-     * Returns the validated data array of all details pertaining to a collivery.
+     * Returns the validated data array of all details pertaining to a
      * This process validates the information based on services, time frames and parcel information.
      * Dates and times may be altered during this process based on the collection and delivery towns service parameters.
      * Certain towns are only serviced on specific days and between certain times.
@@ -967,53 +831,50 @@ class Collivery
     }
 
     /**
-     * Returns the available Parcel Type ID and value array for use in adding a collivery.
-     *
-     * @return array  Parcel  Types
+     * @return array|null
      */
     private function getParcelTypes()
     {
-        if (($this->check_cache) && $this->cache->has('collivery.parcel_types')) {
-            return $this->cache->get('collivery.parcel_types');
-        } else {
-            try {
-                $result = $this->client()->get_parcel_types($this->token);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return false;
-            }
-
-            if (is_array($result)) {
-                if ($this->check_cache) {
-                    $this->cache->put('collivery.parcel_types', $result, 10080);
-                }
-
-                return $result;
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No results returned.');
-                }
-
-                return false;
-            }
+        $cacheKey = 'parcel_types';
+        $parcelType = $this->getCache($cacheKey);
+        if ($this->cacheEnabled && $parcelType) {
+            return $parcelType;
         }
+
+        $result = $this->sendSoapRequest('get_parcel_types');
+
+        if (isset($result['error_id'])) {
+            return $this->setError($result['error_id'], $result['error']);
+        }
+
+        if (is_array($result) && $this->cacheEnabled) {
+            $this->setCache($cacheKey, $result);
+        }
+
+        return $result;
     }
 
     /**
-     * @param $name
-     *
      * @return null
      */
-    private function getCache($name)
+    private function getServices()
     {
-        if ($this->cache->has($name)) {
-            return $this->cache->get($name);
+        $services = $this->getCache('services');
+        if ($services) {
+            return $services;
         }
 
-        return null;
+        $result = $this->sendSoapRequest('get_services');
+        if (isset($result['services'])) {
+            list('services' => $services) = $result;
+            if ($this->cacheEnabled) {
+                $this->setCache('services', $services);
+            }
+
+            return $services;
+        }
+
+        return $result;
     }
 
     /**
@@ -1023,159 +884,81 @@ class Collivery
      */
     private function getPrice(array $data = [])
     {
-        return $this->sendSoapRequest('get_price', array($data));
+        return $this->sendSoapRequest('get_price', [$data]);
     }
 
     /**
-     * @param       $method
-     * @param array $params
+     * @param array $data
      *
-     * @return array
+     * @return array|mixed
      */
-    private function sendSoapRequest($method, array $params = array()){
-        $params[] = $this->token;
-        try{
-            return  $this->client()->{$method}(...$params);
-        }catch (SoapFault $e){
-            return $this->catchSoapFault($e);
-        }
-    }
-
-    /**
-     * @param     $key
-     * @param     $value
-     * @param int $ttl
-     *
-     * @return mixed
-     */
-    private function setCache($key, $value, $ttl = 10080)
-    {
-        return $this->cache->put($key, $value, $ttl);
-    }
-
-    /**
-     * @return null
-     */
-    private function getServices()
-    {
-        $services = $this->getCache('collivery.services');
-        if ($services) {
-            return $services;
-        }
-
-        $result = $this->sendSoapRequest('get_services');
-        if (isset($result['services'])) {
-            list('services' => $services) = $result['services'];
-            if ($this->check_cache) {
-                $this->setCache('collivery.services', $services);
-            }
-
-            return $services;
-        }
-        return $result;
-    }
-
-
     private function addCollivery(array $data)
     {
         $contacts_from = $this->getContacts($data['collivery_from']);
         $contacts_to = $this->getContacts($data['collivery_to']);
         $parcel_types = $this->getParcelTypes();
         $services = $this->getServices();
-        $errors = array();
+        $errors = [];
 
         if (!isset($data['collivery_from'])) {
-           $errors['missing_data'] = 'collivery_from not set.';
+            $errors['missing_data'] = 'collivery_from not set.';
         } elseif (!is_array($this->getAddress($data['collivery_from']))) {
-           $errors['invalid_data'] = 'Invalid Address ID for: collivery_from.';
+            $errors['invalid_data'] = 'Invalid Address ID for: collivery_from.';
         }
 
         if (!isset($data['contact_from'])) {
-           $errors['missing_data'] = 'contact_from not set.';
+            $errors['missing_data'] = 'contact_from not set.';
         } elseif (!isset($contacts_from[$data['contact_from']])) {
-           $errors['invalid_data'] = 'Invalid Contact ID for: contact_from.';
+            $errors['invalid_data'] = 'Invalid Contact ID for: contact_from.';
         }
 
         if (!isset($data['collivery_to'])) {
-           $errors['missing_data'] = 'collivery_to not set.';
+            $errors['missing_data'] = 'collivery_to not set.';
         } elseif (!is_array($this->getAddress($data['collivery_to']))) {
-           $errors['invalid_data'] = 'Invalid Address ID for: collivery_to.';
+            $errors['invalid_data'] = 'Invalid Address ID for: collivery_to.';
         }
 
         if (!isset($data['contact_to'])) {
-           $errors['missing_data'] = 'contact_to not set.';
+            $errors['missing_data'] = 'contact_to not set.';
         } elseif (!isset($contacts_to[$data['contact_to']])) {
-           $errors['invalid_data'] = 'Invalid Contact ID for: contact_to.';
+            $errors['invalid_data'] = 'Invalid Contact ID for: contact_to.';
         }
 
         if (!isset($data['collivery_type'])) {
-           $errors['missing_data'] = 'collivery_type not set.';
+            $errors['missing_data'] = 'collivery_type not set.';
         } elseif (!isset($parcel_types[$data['collivery_type']])) {
-           $errors['invalid_data']  = 'Invalid collivery_type.';
+            $errors['invalid_data'] = 'Invalid collivery_type.';
         }
 
         if (!isset($data['service'])) {
-           $errors['missing_data'] = 'service not set.';
+            $errors['missing_data'] = 'service not set.';
         } elseif (!isset($services[$data['service']])) {
-           $errors['invalid_data'] = 'Invalid service.';
+            $errors['invalid_data'] = 'Invalid service.';
         }
-        if($errors){
+        if ($errors) {
             return $this->setError($errors);
         }
 
+        $result = $this->sendSoapRequest('add_collivery', [$data]);
 
-
-        if (!$this->hasErrors()) {
-            try {
-                $result = $this->client()->add_collivery($data, $this->token);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return false;
-            }
-
-            if (isset($result['collivery_id'])) {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                }
-
-                return $result['collivery_id'];
-            }
-
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            } else {
-                $this->setError('result_unexpected', 'No result returned.');
-            }
+        if (isset($result['error_id'])) {
+            return $this->setError($result['error_id'], $result['error']);
         }
 
-        return false;
+        return $result['collivery_id'];
     }
 
     /**
-     * Accepts the newly created Collivery, moving it from Waiting Client Acceptance
-     * to Accepted so that it can be processed.
+     * @param $collivery_id
      *
-     * @param int $collivery_id ID of the Collivery you wish to accept
-     *
-     * @return boolean                 Has the Collivery been accepted
+     * @return array
      */
     private function acceptCollivery($collivery_id)
     {
-        try {
-            $result = $this->client()->accept_collivery($collivery_id, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
+        $result = $this->sendSoapRequest('accept_collivery', [$collivery_id]);
 
-            return false;
-        }
-
-        if (isset($result['result'])) {
-            if (isset($result['error_id'])) {
-                $this->setError($result['error_id'], $result['error']);
-            }
-
-            return strtolower($result['result']) === 'accepted';
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
         }
 
         if (isset($result['error_id'])) {
@@ -1184,60 +967,127 @@ class Collivery
             $this->setError('result_unexpected', 'No result returned.');
         }
 
-        return false;
+        if ($this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        return ['status' => $result['result']];
     }
 
     /**
-     * @return array
-     */
-    private function getErrors()
-    {
-        return $this->errors;
-    }
-
-    /**
-     * Disable Cached completely and retrieve data directly from the webservice
+     * @return $this
      */
     private function disableCache()
     {
-        $this->check_cache = false;
+        $this->cacheEnabled = false;
+
+        return $this;
     }
 
-    /**
-     * Ignore Cached data and retrieve data directly from the webservice
-     * Save returned data to Cache
-     */
-    private function ignoreCache()
-    {
-        $this->check_cache = 1;
-    }
-
-    /**
-     * Check if cache exists before querying the webservice
-     * If webservice was queried, save returned data to Cache
-     */
     private function enableCache()
     {
-        $this->check_cache = 2;
+        $this->cacheEnabled = true;
+
+        return $this;
     }
 
     /**
      * @param $waybillId
      *
-     * @return bool
+     * @return array
      */
     private function getColliveryStatus($waybillId)
     {
-        $this->errors = [];
+        return $this->sendSoapRequest('get_collivery_status', [$waybillId]);
+    }
 
-        try {
-            return $this->client()->get_collivery_status($waybillId, $this->token);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
+}
+
+class Cache
+{
+
+    private $cache_dir;
+    private $cache;
+
+    public function __construct($cache_dir = null)
+    {
+        if ($cache_dir === null) {
+            $cache_dir = DIR_SYSTEM . '/library/cache/';
+        }
+        $this->cache_dir = $cache_dir;
+    }
+
+    public function has($name)
+    {
+        $cache = $this->load($name);
+
+        return is_array($cache) && ($cache['valid'] - 30) > time();
+    }
+
+    protected function load($name)
+    {
+        if (!isset($this->cache[$name])) {
+            if (file_exists($this->cache_dir . $name) && $content = file_get_contents($this->cache_dir . $name)) {
+                $this->cache[$name] = json_decode($content, true);
+
+                return $this->cache[$name];
+            }
+
+            $this->create_dir($this->cache_dir);
+        } else {
+            return $this->cache[$name];
+        }
+    }
+
+    protected function create_dir($dir_array)
+    {
+        if (!is_array($dir_array)) {
+            $dir_array = explode('/', $this->cache_dir);
+        }
+        array_pop($dir_array);
+        $dir = implode('/', $dir_array);
+
+        if ($dir != '' && !is_dir($dir)) {
+            $this->create_dir($dir_array);
+            if (!mkdir($dir) && !is_dir($dir)) {
+                throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
+            }
+        }
+    }
+
+    public function get($name)
+    {
+        $cache = $this->load($name);
+        if (is_array($cache) && $cache['valid'] > time()) {
+            return $cache['value'];
+        }
+
+        return null;
+    }
+
+    public function put($name, $value, $time = 1440)
+    {
+        $cache = json_encode(['value' => $value, 'valid' => time() + ($time * 60)]);
+        if (file_put_contents($this->cache_dir . $name, $cache)) {
+            $this->cache[$name] = $cache;
+
+            return true;
         }
 
         return false;
     }
 
+    public function forget($name)
+    {
+        $cache = json_encode(['value' => '', 'valid' => 0]);
+        if (file_put_contents($this->cache_dir . $name, $cache)) {
+            $this->cache[$name] = $cache;
+
+            return true;
+        }
+
+        return false;
+    }
 }
+
 
