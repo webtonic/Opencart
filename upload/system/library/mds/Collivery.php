@@ -1,10 +1,8 @@
-<?php namespace Mds;
+<?php
+namespace Mds;
 
 use SoapClient;
 use SoapFault;
-
-// Use PHP Soap Client
-// Use PHP Soap Fault
 
 class Collivery
 {
@@ -88,7 +86,7 @@ class Collivery
     }
 
     /**
-     * @return $this|array
+     * @return $this
      */
     protected function init()
     {
@@ -104,7 +102,7 @@ class Collivery
             }
         }
 
-        return $this->errorsOrResults($this);
+        return $this;
     }
 
     /**
@@ -150,9 +148,9 @@ class Collivery
      *
      * @return array
      */
-    private function errorsOrResults($results)
+    private function errorsOrResults($results = null)
     {
-        if ($this->hasErrors()) {
+        if (null === $results || $this->hasErrors()) {
             return $this->getErrors();
         }
 
@@ -172,7 +170,7 @@ class Collivery
      */
     private function getErrors()
     {
-        return $this->errors;
+        return array('errors' => $this->errors);
     }
 
     /**
@@ -254,18 +252,18 @@ class Collivery
         }
         try {
             if (!($this->client && $this->token)) {
-                $request = $this->init()->authenticate()->client;
+                $client = $this->init()->authenticate()->client;
             } else {
-                $request = $this->client;
+                $client = $this->client;
             }
 
-            return $request->{$method}(...$params);
+            return $client->{$method}( ...$params);
         } catch (SoapFault $e) {
-            return $this->catchSoapFault($e);
+            $this->catchSoapFault($e);
         }
+
+        return $this->getErrors();
     }
-
-
 
     /**
      * Returns all the suburbs of a town.
@@ -365,8 +363,6 @@ class Collivery
         return $this->errorsOrResults($pod);
     }
 
-
-
     /**
      * @return array
      */
@@ -378,7 +374,6 @@ class Collivery
 
         return $this->errorsOrResults($this->client);
     }
-
 
     /**
      * Returns the status tracking detail of a given Waybill number.
@@ -394,7 +389,7 @@ class Collivery
     {
         $cacheKey = 'status.' . $this->client_id . $collivery_id;
         $status = $this->getCache($cacheKey);
-        if($status){
+        if ($status) {
             return $status;
         }
 
@@ -404,18 +399,17 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if(!isset($result['status_id'])) {
+        if (!isset($result['status_id'])) {
             $this->setError('result_unexpected', 'No result returned.');
         }
 
         $result = $result['status_id'];
 
-        if($this->cacheEnabled){
+        if ($this->cacheEnabled) {
             $this->setCache($cacheKey, $result);
         }
 
         return $this->errorsOrResults($result);
-
     }
 
     /**
@@ -460,7 +454,6 @@ class Collivery
             $this->setError('missing_data', 'Please supply ether a phone or cellphone number...');
         }
 
-
         if (!$this->hasErrors()) {
             $result = $this->sendSoapRequest('add_address', array($data));
 
@@ -472,11 +465,9 @@ class Collivery
                 $this->setError('no address added', 'The address could not be added, data validated successfully, error ID not set');
             }
 
-
             $addressId = $result['address_id'];
 
             return $this->errorsOrResults($addressId);
-
         }
 
         return $this->getErrors();
@@ -636,7 +627,7 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if(!isset($result['address'])){
+        if (!isset($result['address'])) {
             $this->setError('no results', 'No results return for getting an address');
         }
 
@@ -706,7 +697,11 @@ class Collivery
         $result = $this->sendSoapRequest('get_contact', [$address_id]);
 
         if (isset($result['error_id'])) {
-            return $this->setError($result['error_id'], $result['error']);
+            $this->setError($result['error_id'], $result['error']);
+        }
+
+        if (!isset($result['contacts'])) {
+            $this->setError('No contacts', 'No contacts returned from get contacts');
         }
 
         $contacts = $result['contacts'];
@@ -714,7 +709,7 @@ class Collivery
             $this->setCache($cacheKey, $contacts);
         }
 
-        return $contacts;
+        return $this->errorsOrResults($contacts);
     }
 
     /**
@@ -803,31 +798,20 @@ class Collivery
             $this->setError('invalid_data', 'Invalid service.');
         }
 
-        if (!$this->hasErrors()) {
-            try {
-                $result = $this->client()->validate_collivery($data, $this->token);
-            } catch (SoapFault $e) {
-                $this->catchSoapFault($e);
-
-                return false;
-            }
-
-            if (is_array($result)) {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                }
-
-                return $result;
-            } else {
-                if (isset($result['error_id'])) {
-                    $this->setError($result['error_id'], $result['error']);
-                } else {
-                    $this->setError('result_unexpected', 'No result returned.');
-                }
-
-                return false;
-            }
+        if ($this->hasErrors()) {
+            return $this->errorsOrResults();
         }
+        $result = $this->sendSoapRequest('validate_collivery', array($data));
+
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
+        }
+
+        if (!$result) {
+            $this->setError('result_unexpected', 'No result returned.');
+        }
+
+        return $this->errorsOrResults($result);
     }
 
     /**
@@ -844,37 +828,39 @@ class Collivery
         $result = $this->sendSoapRequest('get_parcel_types');
 
         if (isset($result['error_id'])) {
-            return $this->setError($result['error_id'], $result['error']);
+            $this->setError($result['error_id'], $result['error']);
         }
 
         if (is_array($result) && $this->cacheEnabled) {
             $this->setCache($cacheKey, $result);
         }
 
-        return $result;
+        return $this->errorsOrResults($result);
     }
 
     /**
-     * @return null
+     * @return array
      */
     private function getServices()
     {
         $services = $this->getCache('services');
         if ($services) {
-            return $services;
+            return $this->errorsOrResults($services);
         }
 
         $result = $this->sendSoapRequest('get_services');
-        if (isset($result['services'])) {
-            list('services' => $services) = $result;
-            if ($this->cacheEnabled) {
-                $this->setCache('services', $services);
-            }
+        if (!isset($result['services'])) {
+            $this->setError('No data return', 'Could not get services');
 
-            return $services;
+            return $this->errorsOrResults();
         }
 
-        return $result;
+        list('services' => $services) = $result;
+        if ($this->cacheEnabled) {
+            $this->setCache('services', $services);
+        }
+
+        return $this->errorsOrResults($services);
     }
 
     /**
@@ -884,7 +870,11 @@ class Collivery
      */
     private function getPrice(array $data = [])
     {
-        return $this->sendSoapRequest('get_price', [$data]);
+        if ($this->validateGetPriceData($data)) {
+            return $this->sendSoapRequest('get_price', [$data]);
+        }
+
+        return $this->getErrors();
     }
 
     /**
@@ -1000,12 +990,10 @@ class Collivery
     {
         return $this->sendSoapRequest('get_collivery_status', [$waybillId]);
     }
-
 }
 
 class Cache
 {
-
     private $cache_dir;
     private $cache;
 
@@ -1047,7 +1035,7 @@ class Cache
         array_pop($dir_array);
         $dir = implode('/', $dir_array);
 
-        if ($dir != '' && !is_dir($dir)) {
+        if ($dir != '') {
             $this->create_dir($dir_array);
             if (!mkdir($dir) && !is_dir($dir)) {
                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
@@ -1089,5 +1077,4 @@ class Cache
         return false;
     }
 }
-
 
