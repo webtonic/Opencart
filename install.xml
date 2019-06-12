@@ -14,13 +14,15 @@
             </search>
             <add position="after">
                 <![CDATA[
+        /** @collivery-config */
         if(!$this->registry->has('collivery')){
-            $collivery_query = $this->registry->get('db')->query("select u.value as username, p.value as password, d.value as is_demo from " . DB_PREFIX . "setting as p left join " . DB_PREFIX . "setting as u on(u.code=p.code) left join " . DB_PREFIX . "setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'");
-            $demo_auth = array('username' => 'api@collivery.co.za', 'password' => 'api123', 'is_demo' => true);
-            if($collivery_query->num_rows && !((bool) $collivery_query->row['is_demo'])){
-                list('username' => $username, 'password' => $password, 'is_demo'=> $is_demo) = $collivery_query->row;
+            $query = $this->registry->get('db')->query("select u.value as username, p.value as password, d.value as is_demo from " . DB_PREFIX . "setting as p left join " . DB_PREFIX . "setting as u on(u.code=p.code) left join " . DB_PREFIX . "setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'");
+            if(!$query->num_rows){
+                $is_demo = true;
+                $username = '';
+                $password = '';
             }else{
-                list('username' => $username, 'password' => $password, 'is_demo' => $is_demo) = $demo_auth;
+                list('username' => $username, 'password' => $password, 'is_demo'=> $is_demo) = $query->row;
             }
             $config = array(
                 'log' => $this->registry->get('log'),
@@ -30,19 +32,16 @@
                 'app_url' => $_SERVER['HTTP_HOST'],
                 'user_email' => $username ,
                 'user_password' => $password,
-                'demo' => (bool) $is_demo
+                'demo' =>  $is_demo
             );
 
-            foreach ($config as $_key => $value){
-                $this->registry->set('collivery_config_' . $_key, $value);
-            }
             $collivery_library = DIR_SYSTEM . 'library/mds/Collivery.php';
             if(is_file($collivery_library)){
                 include_once $collivery_library;
                 $this->registry->set('collivery', new \Mds\Collivery($config));
             }
-            /** @endcollivery-config */
         }
+        /** @endcollivery-config */
                 ]]>
             </add>
         </operation>
@@ -55,19 +54,22 @@
             <add position="after">
                 <![CDATA[
         /** @collivery-data */
-        $default_address =  $this->collivery->getDefaultAddress();
-        $sql_data['collivery_from_address_id'] = $default_address['address']['address_id'];
-        $sql_data['collivery_from_contact_id'] = current($default_address['contacts'])['contact_id'];
+        if($this->collivery){
+            $default_address =  $this->collivery->getDefaultAddress();
+            $sql_data['collivery_from_address_id'] = $default_address['address']['address_id'];
+            $sql_data['collivery_from_contact_id'] = current($default_address['contacts'])['contact_id'];
 
-        if(isset($data['shipping_collivery_location_type'], $data['shipping_collivery_town'], $data['shipping_collivery_suburb'])){
-            $sql_data['collivery_location_type'] = $data['shipping_collivery_location_type'];
-            $sql_data['collivery_town'] = $data['shipping_collivery_town'];
-            $sql_data['collivery_suburb'] = $data['shipping_collivery_suburb'];
+            if(isset($data['shipping_collivery_location_type'], $data['shipping_collivery_town'], $data['shipping_collivery_suburb'])){
+                $sql_data['collivery_location_type'] = $data['shipping_collivery_location_type'];
+                $sql_data['collivery_town'] = $data['shipping_collivery_town'];
+                $sql_data['collivery_suburb'] = $data['shipping_collivery_suburb'];
+            }
+            $extra_sql = '';
+            foreach($sql_data as $column => $value){
+                $extra_sql .= $column ."='" . $value . "',";
+            }
         }
-        $extra_sql = '';
-        foreach($sql_data as $column => $value){
-            $extra_sql .= $column ."='" . $value . "',";
-        }
+
         /** @endcollivery-data */
                 ]]>
             </add>
@@ -99,7 +101,7 @@
             </search>
             <add position="replace">
                 <![CDATA[
-                    $order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];
+                $order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];
 				$order_data['shipping_collivery_town'] = $this->session->data['shipping_address']['collivery_town'];
 				$order_data['shipping_collivery_suburb'] = $this->session->data['shipping_address']['collivery_suburb'];
 				$order_data['shipping_collivery_location_type'] = $this->session->data['shipping_address']['collivery_location_type'];
@@ -474,7 +476,7 @@ protected  $collivery_fields = array(
             if($data['collivery_town']){
                 $data['town'] = $towns[$data['collivery_town']];
             }
-            if($data['collivery_suburb']){
+            if(!empty($suburbs) && isset($data['collivery_suburb'])){
                 $data['suburb'] = $suburbs[$data['collivery_suburb']];
             }
             if($data['collivery_location_type']){
