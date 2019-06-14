@@ -14,16 +14,16 @@
             </search>
             <add position="before">
                 <![CDATA[
-        $collivery_method_not_available = false;
+        $collivery_method_available = false;
 		foreach ($this->session->data['shipping_methods'] as $method_array){
 		    if(isset($method_array['code']) && $method_array['code'] === 'mds' && count($method_array['quote'])) {
-                $collivery_method_not_available = true;
+                $collivery_method_available = true;
                 break;
             }
 
         }
-		if(!$collivery_method_not_available){
-            $data['error_warning'] = 'No Collivery.net Shipping!';
+		if($collivery_method_available){
+            $data['error_warning'] = 'No Collivery.net Shipping Methods Available!';
         }
                 ]]>
             </add>
@@ -1368,7 +1368,7 @@ protected  $collivery_fields = array(
                 <![CDATA[
             /** @collivery-data **/
 
-                if($this->collivery && !$this->colivery->hasErrors()){
+                if($this->collivery && !$this->collivery->hasErrors()){
                     if($custom_field['name'] === 'Location Type' || $custom_field['name'] === 'Town' || $custom_field['name'] === 'Suburb'){
                         $custom_field_value_query->rows = array();
                         if($custom_field['name'] == 'Location Type'){
