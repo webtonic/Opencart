@@ -1367,7 +1367,7 @@ protected  $collivery_fields = array(
                 <![CDATA[
             /** @collivery-data **/
 
-                if($this->collivery){
+                if($this->collivery && !$this->colivery->hasErrors()){
                     if($custom_field['name'] === 'Location Type' || $custom_field['name'] === 'Town' || $custom_field['name'] === 'Suburb'){
                         $custom_field_value_query->rows = array();
                         if($custom_field['name'] == 'Location Type'){
