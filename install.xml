@@ -7,6 +7,29 @@
     <link>http://www.collivery.co.za</link>
     <!-- CONTROLLERS -->
     <!-- Admin Controllers -->
+    <file path="catalog/controller/checkout/shipping_method.php">
+        <operation>
+            <search>
+                <![CDATA[if (isset($this->session->data['shipping_methods'])) {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+        $collivery_method_not_available = false;
+		foreach ($this->session->data['shipping_methods'] as $method_array){
+		    if(isset($method_array['code']) && $method_array['code'] === 'mds' && count($method_array['quote'])) {
+                $collivery_method_not_available = true;
+                break;
+            }
+
+        }
+		if(!$collivery_method_not_available){
+            $data['error_warning'] = 'No Collivery.net Shipping!';
+        }
+                ]]>
+            </add>
+        </operation>
+
+    </file>
     <file path="system/engine/controller.php">
         <operation>
             <search>
