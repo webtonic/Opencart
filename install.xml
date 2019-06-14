@@ -418,18 +418,7 @@ protected  $collivery_fields = array(
                 <![CDATA[
     /** @collivery-data */
 
-        if (
-            isset($this->request->post['order_id']
-            , $this->request->post['collivery_location_type']
-            , $this->request->post['collivery_town']
-            , $this->request->post['collivery_suburb'])
-        ) {
-            $o = $this->request->post['order_id'];
-            $clt = $this->request->post['collivery_location_type'];
-            $ct = $this->request->post['collivery_town'];
-            $cs = $this->request->post['collivery_suburb'];
-            $this->db->query('update ' . DB_PREFIX ."order set collivery_location_type='$clt', collivery_town='$ct', collivery_suburb='$cs' where order_id='$o'");
-        }
+
         list($code, $service_type_id) = explode('.', $data['shipping_code']);
         $data['is_mds'] = $code == 'mds';
         $location_types = $this->collivery->getLocationTypes();
