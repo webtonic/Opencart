@@ -9,7 +9,7 @@ class Collivery
 {
     const ENDPOINT = 'http://ops.collivery.local/webservice.php?wsdl';
     const DEMO_ACCOUNT = ['user_email' => 'api@collivery.co.za', 'user_password' => 'api123'];
-    const CACHE_PREFIX = 'collivery_shipping_plugin_cache_.';
+    const CACHE_PREFIX = 'collivery_net.';
     protected $token;
     protected $client;
     protected $config;
@@ -139,9 +139,12 @@ class Collivery
      */
     private function authenticate()
     {
-        $cacheKey = 'auth';
+        $cacheKey = $this->getCacheKey('auth');
+
         $auth = $this->getCache($cacheKey);
-        $isSameUser = isset($auth['user_email']) ? strtolower($this->config->user_email) === strtolower($auth['user_email']) : false;
+        $isSameUser = isset($auth['user_email'], $this->config->user_email) && !strcasecmp($this->config->user_email,
+                $auth['user_email']);
+
         if ($this->cacheEnabled && $isSameUser) {
             $this->default_address_id = $auth['default_address_id'];
             $this->client_id = $auth['client_id'];
@@ -150,6 +153,7 @@ class Collivery
         } else {
             $user_email = strtolower($this->config->user_email);
             $user_password = $this->config->user_password;
+
             $config = [
                 'name'    => $this->config->app_name,
                 'version' => $this->config->app_version,
@@ -157,75 +161,38 @@ class Collivery
                 'url'     => $this->config->app_url,
                 'lang'    => 'PHP ' . PHP_VERSION,
             ];
-            $authenticate = $this->sendSoapRequest('authenticate',
-                [$user_email, $user_password, $this->token, $config]);
 
-            if (isset($authenticate['token'])) {
-                if ($this->cacheEnabled) {
-                    $this->setCache($cacheKey, $authenticate);
+            try {
+                !$this->client && $this->init();
+                if ($this->hasErrors()) {
+                    return $this->getErrors();
                 }
+                $authenticate = $this->client->authenticate($user_email, $user_password, $this->token, $config);
+                if (isset($authenticate['token'])) {
+                    if ($this->cacheEnabled) {
+                        $this->setCache($cacheKey, $authenticate);
+                    }
 
-                $this->default_address_id = $authenticate['default_address_id'];
-                $this->client_id = $authenticate['client_id'];
-                $this->user_id = $authenticate['user_id'];
-                $this->token = $authenticate['token'];
+                    $this->default_address_id = $authenticate['default_address_id'];
+                    $this->client_id = $authenticate['client_id'];
+                    $this->user_id = $authenticate['user_id'];
+                    $this->token = $authenticate['token'];
+                }
+            } catch (SoapFault $exception) {
+                $this->catchSoapFault($exception);
             }
         }
 
         return $this;
     }
 
-    /**
-     * @param       $method
-     * @param array $params
-     *
-     * @return array
-     */
-    private function sendSoapRequest($method, array $params = [])
-    {
-
-
-        if (!in_array($this->token, $params, true)) {
-            $params[] = $this->token;
-        }
-
-        try {
-            !$this->client && $this->init();
-            !$this->token && $this->authenticate();
-
-            return $this->client->{$method}(...$params);
-        } catch (SoapFault $e) {
-            $this->catchSoapFault($e);
-        }
-
-        return $this->errorsOrResults();
-    }
-
-    /**
-     * @return array
-     */
-    private function getErrors()
-    {
-        return $this->errors;
-    }
-
     private function getCacheKey($key)
     {
-        return strtolower(self::CACHE_PREFIX . $key);
-    }
+        if ($key) {
+            return strtolower(self::CACHE_PREFIX . $key);
+        }
 
-    /**
-     * @param     $key
-     * @param     $value
-     * @param int $ttl
-     *
-     * @return mixed
-     */
-    private function setCache($key, $value, $ttl = 10080)
-    {
-        $key = $this->getCacheKey($key);
-
-        return $this->cache->put($key, $value, $ttl);
+        return $key;
     }
 
     /**
@@ -254,11 +221,47 @@ class Collivery
     /**
      * @return array
      */
+    private function getErrors()
+    {
+        return $this->errors;
+    }
+
+    /**
+     * @param     $key
+     * @param     $value
+     * @param int $ttl
+     *
+     * @return mixed
+     */
+    private function setCache($key, $value, $ttl = 10080)
+    {
+        $key = $this->getCacheKey($key);
+
+        return $this->cache->put($key, $value, $ttl);
+    }
+
+    /**
+     * @return array
+     */
     protected function client()
     {
         !$this->client && $this->init();
 
         return $this->errorsOrResults($this->client);
+    }
+
+    /**
+     * @param $results
+     *
+     * @return array
+     */
+    private function errorsOrResults($results = null)
+    {
+        if (null === $results || $this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        return $results;
     }
 
     /**
@@ -301,17 +304,30 @@ class Collivery
     }
 
     /**
-     * @param $results
+     * @param       $method
+     * @param array $params
      *
      * @return array
      */
-    private function errorsOrResults($results = null)
+    private function sendSoapRequest($method, array $params = [])
     {
-        if (null === $results || $this->hasErrors()) {
-            return $this->getErrors();
+
+
+        if (!in_array($this->token, $params, true)) {
+            $params[] = $this->token;
         }
 
-        return $results;
+        try {
+            !$this->client && $this->init();
+
+            $this->authenticate();
+
+            return $this->client->{$method}(...$params);
+        } catch (SoapFault $e) {
+            $this->catchSoapFault($e);
+        }
+
+        return $this->errorsOrResults();
     }
 
     /**
@@ -620,7 +636,7 @@ class Collivery
      */
     private function getAddress($address_id)
     {
-        $cacheKey = 'address.' . $this->client_id . '.' . $address_id;
+        $cacheKey = 'address.' . $this->client_id . '.' .  ($address_id ?: '0');
         $address = $this->getCache($cacheKey);
         if ($address) {
             return $address;
@@ -632,8 +648,8 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if (!isset($result['address'])) {
-            $this->setError('no results', 'No results return for getting an address');
+        if ($this->hasErrors()) {
+            return $this->getErrors();
         }
 
         list('address' => $address) = $result;
@@ -701,8 +717,8 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if (!isset($result['contacts'])) {
-            $this->setError('No contacts', 'No contacts returned from get contacts');
+        if ($this->hasErrors()) {
+            return $this->getErrors();
         }
 
         $contacts = $result['contacts'];
