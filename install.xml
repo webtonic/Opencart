@@ -535,6 +535,7 @@ protected  $collivery_fields = array(
                     public function getTownSuburbs() {
                         $townId = $this->request->get['town_id'];
                         $respond = "";
+
                         foreach ($this->collivery->getSuburbs($townId) as $key => $sub) {
                             $respond .= '<option value="'.$key.'">'. $sub .'</option>';
                         }
@@ -1414,7 +1415,7 @@ protected  $collivery_fields = array(
             /** @collivery-data **/
         $query = $this->db->query("select * from " . DB_PREFIX . "custom_field_description where custom_field_id={$custom_field_id}");
         if($query->num_rows){
-            if($query->row['name'] === 'Town' || $query->row['name'] === 'Suburb' || $query->row['name'] === 'Location Type'){
+            if($query->row['name'] === 'Town' || $query->row['name'] === 'Suburb' || $query->row['name'] === 'Location Type' && $this->collivery && !$this->collivery->hasErrors()){
                 $locationtype = $this->collivery->getLocationTypes();
                 $town = $this->collivery->getTowns();
                 $suburb = $this->collivery->getAllSuburbs();
