@@ -186,13 +186,14 @@ class Collivery
         return $this;
     }
 
+    /**
+     * @param $key
+     *
+     * @return string
+     */
     private function getCacheKey($key)
     {
-        if ($key) {
-            return strtolower(self::CACHE_PREFIX . $key);
-        }
-
-        return $key;
+        return strtolower(self::CACHE_PREFIX . $key);
     }
 
     /**
