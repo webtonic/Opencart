@@ -193,7 +193,7 @@ class Collivery
      */
     private function getCacheKey($key)
     {
-        return strtolower(self::CACHE_PREFIX . $key);
+        return strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key));
     }
 
     /**
@@ -489,7 +489,9 @@ class Collivery
 
             $addressId = $result['address_id'];
 
-            return $this->errorsOrResults($addressId);
+            list('contact_id' => $contactId) = current($this->getContacts($addressId));
+
+            return $this->errorsOrResults(['address_id' => $addressId, 'contact_id' => $contactId]);
         }
 
         return $this->getErrors();
@@ -567,7 +569,7 @@ class Collivery
      */
     private function getSuburbs($town_id)
     {
-        $cacheKey = 'suburbs.' . $town_id;
+        $cacheKey = 'suburbs.' . ($town_id ?: '0');
         $suburbs = $this->getCache($cacheKey);
         if ($suburbs) {
             return $suburbs;
@@ -588,6 +590,37 @@ class Collivery
         }
 
         return $this->errorsOrResults($suburbs);
+    }
+
+    /**
+     * @param $address_id
+     *
+     * @return array|mixed|null
+     */
+    private function getContacts($address_id)
+    {
+        $cacheKey = 'contacts.' . $this->client_id . '.' . $address_id;
+        $contacts = $this->getCache($cacheKey);
+        if ($this->cacheEnabled && $contacts) {
+            return $contacts;
+        }
+
+        $result = $this->sendSoapRequest('get_contacts', [$address_id]);
+
+        if (isset($result['error_id'])) {
+            $this->setError($result['error_id'], $result['error']);
+        }
+
+        if ($this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        $contacts = $result['contacts'];
+        if ($this->cacheEnabled) {
+            $this->setCache($cacheKey, $contacts);
+        }
+
+        return $this->errorsOrResults($contacts);
     }
 
     /**
@@ -697,37 +730,6 @@ class Collivery
     private function getDefaultAddressId()
     {
         return $this->default_address_id;
-    }
-
-    /**
-     * @param $address_id
-     *
-     * @return array|mixed|null
-     */
-    private function getContacts($address_id)
-    {
-        $cacheKey = 'contacts.' . $this->client_id . '.' . $address_id;
-        $contacts = $this->getCache($cacheKey);
-        if ($this->cacheEnabled && $contacts) {
-            return $contacts;
-        }
-
-        $result = $this->sendSoapRequest('get_contacts', [$address_id]);
-
-        if (isset($result['error_id'])) {
-            $this->setError($result['error_id'], $result['error']);
-        }
-
-        if ($this->hasErrors()) {
-            return $this->getErrors();
-        }
-
-        $contacts = $result['contacts'];
-        if ($this->cacheEnabled) {
-            $this->setCache($cacheKey, $contacts);
-        }
-
-        return $this->errorsOrResults($contacts);
     }
 
     /**
@@ -1123,6 +1125,3 @@ class Cache
         return false;
     }
 }
-
-
-
