@@ -2,6 +2,7 @@
 
 namespace Mds;
 
+use GuzzleHttp\Exception\RequestException;
 use SoapClient;
 use SoapFault;
 
@@ -54,6 +55,7 @@ class Collivery
      * @param $args
      *
      * @return array|mixed
+     * @throws \ReflectionException
      */
     public function __call($method, $args)
     {
@@ -78,6 +80,7 @@ class Collivery
 
     /**
      * @return $this
+     * @throws \ReflectionException
      */
     protected function init()
     {
@@ -89,6 +92,8 @@ class Collivery
                 );
             } catch (SoapFault $e) {
                 $this->catchSoapFault($e);
+            } catch (\ReflectionException $e) {
+
             }
         }
 
@@ -97,6 +102,8 @@ class Collivery
 
     /**
      * @param SoapFault $e
+     *
+     * @throws \ReflectionException
      */
     protected function catchSoapFault(SoapFault $e)
     {
@@ -108,6 +115,7 @@ class Collivery
      * @param string $text
      *
      * @return $this
+     * @throws \ReflectionException
      */
     protected function setError($id, $text = '')
     {
@@ -125,75 +133,105 @@ class Collivery
     }
 
     /**
-     * @param string $message
+     * @param $message
+     *
+     * @throws \ReflectionException
      */
-    private function log($message = '')
+    private function log($message)
     {
-        if (property_exists($this, 'log')) {
-            $this->log->write('collivery_net_error: ' . $message);
+        if (is_array($message)) {
+            foreach ($message as $value) {
+                $this->log($value);
+            }
+
+            return;
         }
+        if (property_exists($this, 'log')) {
+
+            try{
+                $reflectionClass = new \ReflectionClass($this->log);
+                $message = "collivery_net_error: {$message}"; //message to be logged
+
+                foreach (['write', 'message'] as $method) {
+                    if ($reflectionClass->hasMethod($method)) {
+                        $this->log->{$method}($message);
+                        break; //exit
+                    }
+                }
+            }catch (RequestException $e){
+                die($e->getMessage());
+            }
+
+        }
+
     }
 
     /**
      * @return $this|array
+     * @throws \ReflectionException
      */
     private function authenticate()
     {
-        $cacheKey = $this->getCacheKey('auth');
-
+        $cacheKey = 'auth';
         $auth = $this->getCache($cacheKey);
-        $isSameUser = isset($auth['user_email'], $this->config->user_email) && !strcasecmp($this->config->user_email,
-                $auth['user_email']);
 
-        if ($this->cacheEnabled && $isSameUser) {
+
+        $isSameUser = $auth &&
+            isset($auth['user_email'], $this->config->user_email) &&
+            !strcasecmp($this->config->user_email, $auth['user_email']);
+
+        if ($isSameUser) {
             $this->default_address_id = $auth['default_address_id'];
             $this->client_id = $auth['client_id'];
             $this->user_id = $auth['user_id'];
             $this->token = $auth['token'];
-        } else {
-            $user_email = strtolower($this->config->user_email);
-            $user_password = $this->config->user_password;
 
-            $config = [
-                'name'    => $this->config->app_name,
-                'version' => $this->config->app_version,
-                'host'    => $this->config->app_host,
-                'url'     => $this->config->app_url,
-                'lang'    => 'PHP ' . PHP_VERSION,
-            ];
-
-            try {
-                !$this->client && $this->init();
-                if ($this->hasErrors()) {
-                    return $this->getErrors();
-                }
-                $authenticate = $this->client->authenticate($user_email, $user_password, $this->token, $config);
-                if (isset($authenticate['token'])) {
-                    if ($this->cacheEnabled) {
-                        $this->setCache($cacheKey, $authenticate);
-                    }
-
-                    $this->default_address_id = $authenticate['default_address_id'];
-                    $this->client_id = $authenticate['client_id'];
-                    $this->user_id = $authenticate['user_id'];
-                    $this->token = $authenticate['token'];
-                }
-            } catch (SoapFault $exception) {
-                $this->catchSoapFault($exception);
-            }
+            return $this;
         }
 
-        return $this;
-    }
 
-    /**
-     * @param $key
-     *
-     * @return string
-     */
-    private function getCacheKey($key)
-    {
-        return strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key));
+
+        $user_email = strtolower($this->config->user_email);
+        $user_password = $this->config->user_password;
+
+        $config = [
+            'name'    => $this->config->app_name,
+            'version' => $this->config->app_version,
+            'host'    => $this->config->app_host,
+            'url'     => $this->config->app_url,
+            'lang'    => 'PHP ' . PHP_VERSION,
+        ];
+
+        !$this->client && $this->init();
+        if ($this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        try {
+
+            $authenticate = $this->client->authenticate($user_email, $user_password, $this->token, $config);
+
+            if ($authenticate) {
+
+                if ($this->cacheEnabled) {
+                    $this->setCache($cacheKey, $authenticate);
+
+                }
+
+                $this->default_address_id = $authenticate['default_address_id'];
+                $this->client_id = $authenticate['client_id'];
+                $this->user_id = $authenticate['user_id'];
+                $this->token = $authenticate['token'];
+
+                return $this;
+            }
+        } catch (SoapFault $exception) {
+            $this->catchSoapFault($exception);
+        } catch (\ReflectionException $e) {
+            die($e->getMessage());
+        }
+
+        return $this->errorsOrResults();
     }
 
     /**
@@ -204,11 +242,22 @@ class Collivery
     private function getCache($key)
     {
         $key = $this->getCacheKey($key);
+
         if ($this->cacheEnabled && $this->cache->has($key)) {
             return $this->cache->get($key);
         }
 
         return null;
+    }
+
+    /**
+     * @param $key
+     *
+     * @return string
+     */
+    private function getCacheKey($key)
+    {
+        return strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key));
     }
 
     /**
@@ -238,13 +287,15 @@ class Collivery
     {
         $key = $this->getCacheKey($key);
 
+
+
         return $this->cache->put($key, $value, $ttl);
     }
 
     /**
      * @return array
      */
-    protected function client()
+    protected function getClient()
     {
         !$this->client && $this->init();
 
@@ -274,26 +325,30 @@ class Collivery
      */
     private function getAllSuburbs($town_id = null)
     {
-        $cacheKey = 'suburbs.' . ($town_id ?: 0);
-        if ($town_id) {
-            $suburbs = $this->getCache($cacheKey);
+        return $this->getSuburbs($town_id);
+    }
 
-            if ($suburbs) {
-                return $suburbs;
-            }
+    /**
+     * @param $town_id
+     *
+     * @return array|mixed|null
+     */
+    private function getSuburbs($town_id)
+    {
+        $cacheKey = 'suburbs.' . ($town_id ?: '0');
+        $suburbs = $this->getCache($cacheKey);
+
+        if ($suburbs) {
+            return $suburbs;
         }
-        $result = $this->sendSoapRequest('get_all_suburbs', [$town_id]);
 
+        $result = $this->sendSoapRequest('get_suburbs', [$town_id]);
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
         }
 
         if (!isset($result['suburbs'])) {
-            $this->setError('result_unexpected', 'No result returned.');
-        }
-
-        if ($this->hasErrors()) {
-            return ['errors' => $this->getErrors()];
+            $this->setError('no_results', 'No suburbs returned by the server');
         }
 
         $suburbs = $result['suburbs'];
@@ -563,45 +618,16 @@ class Collivery
     }
 
     /**
-     * @param $town_id
-     *
-     * @return array|mixed|null
-     */
-    private function getSuburbs($town_id)
-    {
-        $cacheKey = 'suburbs.' . ($town_id ?: '0');
-        $suburbs = $this->getCache($cacheKey);
-        if ($suburbs) {
-            return $suburbs;
-        }
-
-        $result = $this->sendSoapRequest('get_suburbs', [$town_id]);
-        if (isset($result['error_id'])) {
-            $this->setError($result['error_id'], $result['error']);
-        }
-
-        if (!isset($result['suburbs'])) {
-            $this->setError('no_results', 'No suburbs returned by the server');
-        }
-
-        $suburbs = $result['suburbs'];
-        if ($this->cacheEnabled) {
-            $this->setCache($cacheKey, $suburbs);
-        }
-
-        return $this->errorsOrResults($suburbs);
-    }
-
-    /**
      * @param $address_id
      *
      * @return array|mixed|null
+     * @throws \ReflectionException
      */
     private function getContacts($address_id)
     {
         $cacheKey = 'contacts.' . $this->client_id . '.' . $address_id;
         $contacts = $this->getCache($cacheKey);
-        if ($this->cacheEnabled && $contacts) {
+        if ($contacts) {
             return $contacts;
         }
 
@@ -831,10 +857,14 @@ class Collivery
 
     /**
      * @return array
+     * @throws \ReflectionException
      */
     private function getServices()
     {
-        $services = $this->getCache('services');
+        $cacheKey = 'services';
+        $services = $this->getCache($cacheKey);
+
+
         if ($services) {
             return $this->errorsOrResults($services);
         }
@@ -848,7 +878,7 @@ class Collivery
 
         list('services' => $services) = $result;
         if ($this->cacheEnabled) {
-            $this->setCache('services', $services);
+            $this->setCache($cacheKey, $services);
         }
 
         return $this->errorsOrResults($services);
@@ -1125,3 +1155,6 @@ class Cache
         return false;
     }
 }
+
+
+
