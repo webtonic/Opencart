@@ -31,7 +31,8 @@ class Collivery
     public function __construct(array $config = [], $cache = null)
     {
 
-        $this->cache = $cache ?: new Cache(DIR_SYSTEM . '/library/cache/');
+        $config['cache_dir'] = isset($config['cache_dir']) ? $config['cache_dir'] : basename(__DIR__);
+        $this->cache = $cache ?: new Cache($config['cache_dir']);
         $this->cacheEnabled = (bool)(isset($config['enable_cache']) ? $config['enable_cache'] : $this->cacheEnabled);
         $this->log = isset($config['log']) ? $config['log'] : null;
 
