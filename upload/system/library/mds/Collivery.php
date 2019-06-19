@@ -422,6 +422,7 @@ class Collivery
      * @param $colliveryId
      *
      * @return array|mixed|null
+     * @throws \ReflectionException
      */
     private function getPod($colliveryId)
     {
@@ -437,8 +438,8 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if (!isset($result['pod'])) {
-            $this->setError('no results', "No POD returned for waybill {$colliveryId}");
+        if($this->hasErrors()){
+            return $this->errorsOrResults();
         }
 
         $pod = $result['pod'];
@@ -453,12 +454,13 @@ class Collivery
     /**
      * Returns the status tracking detail of a given Waybill number.
      * If the collivery is still active, the estimated time of delivery
-     * will be provided. If delivered, the time and receivers name (if availble)
+     * will be provided. If delivered, the time and receivers name (if available)
      * with returned.
      *
      * @param int $collivery_id Collivery ID
      *
      * @return bool|array                 Collivery Status Information
+     * @throws \ReflectionException
      */
     private function getStatus($collivery_id)
     {
@@ -653,6 +655,7 @@ class Collivery
      * @param array $data
      *
      * @return $this|array
+     * @throws \ReflectionException
      */
     private function addContact(array $data)
     {
@@ -693,6 +696,7 @@ class Collivery
      * @param $address_id
      *
      * @return array|mixed|null
+     * @throws \ReflectionException
      */
     private function getAddress($address_id)
     {
