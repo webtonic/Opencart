@@ -1085,18 +1085,18 @@ class Cache
 
     protected function create_dir($dir_array)
     {
-        /*if (!is_array($dir_array)) {
+        if (!is_array($dir_array)) {
             $dir_array = explode('/', $this->cache_dir);
         }
         array_pop($dir_array);
         $dir = implode('/', $dir_array);
 
-        if ($dir != '' && !is_dir($dir)) {
+        if ($dir !== '' && !is_dir($dir)) {
             $this->create_dir($dir_array);
             if (!mkdir($dir) && !is_dir($dir)) {
                 throw new \RuntimeException(sprintf('Directory "%s" was not created', $dir));
             }
-        }*/
+        }
     }
 
     /**
