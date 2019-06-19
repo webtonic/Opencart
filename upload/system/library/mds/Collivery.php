@@ -30,12 +30,11 @@ class Collivery
      */
     public function __construct(array $config = [], $cache = null)
     {
+
         $this->cache = $cache ?: new Cache(DIR_SYSTEM . '/library/cache/');
-        $log = isset($config['log']) ? $config['log'] : null;
-        if ($log) {
-            $this->log = $log;
-            unset($config['log']);
-        }
+        $this->cacheEnabled = (bool)(isset($config['enable_cache']) ? $config['enable_cache'] : $this->cacheEnabled);
+        $this->log = isset($config['log']) ? $config['log'] : null;
+
         if (isset($config['demo']) && $config['demo']) {
             $config = array_merge($config, self::DEMO_ACCOUNT);
         }
@@ -44,10 +43,11 @@ class Collivery
     }
 
     /**
+     * Any method called from this class goes via the magic call
      * We want to make sure that we clear all errors that were generated
      * before before calling another method, we also want to ensure that
      * Soap client is initialized before calling any method from it
-     * We also want to make sure that a collivery client is autheticated
+     * We also want to make sure that a collivery client is authenticated
      *if the conditions above do not succeed, return errors stating reason
      * for failure for each
      *
@@ -65,7 +65,7 @@ class Collivery
 
         !$this->token && $this->authenticate();
 
-        return $this->errors ?: call_user_func_array([$this, $method], $args);
+        return $this->getErrors() ?: call_user_func_array([$this, $method], $args);
     }
 
     /**
@@ -93,7 +93,7 @@ class Collivery
             } catch (SoapFault $e) {
                 $this->catchSoapFault($e);
             } catch (\ReflectionException $e) {
-
+                die($e->getMessage());
             }
         }
 
@@ -148,7 +148,7 @@ class Collivery
         }
         if (property_exists($this, 'log')) {
 
-            try{
+            try {
                 $reflectionClass = new \ReflectionClass($this->log);
                 $message = "collivery_net_error: {$message}"; //message to be logged
 
@@ -158,12 +158,10 @@ class Collivery
                         break; //exit
                     }
                 }
-            }catch (RequestException $e){
+            } catch (RequestException $e) {
                 die($e->getMessage());
             }
-
         }
-
     }
 
     /**
@@ -174,7 +172,6 @@ class Collivery
     {
         $cacheKey = 'auth';
         $auth = $this->getCache($cacheKey);
-
 
         $isSameUser = $auth &&
             isset($auth['user_email'], $this->config->user_email) &&
@@ -188,8 +185,6 @@ class Collivery
 
             return $this;
         }
-
-
 
         $user_email = strtolower($this->config->user_email);
         $user_password = $this->config->user_password;
@@ -215,7 +210,6 @@ class Collivery
 
                 if ($this->cacheEnabled) {
                     $this->setCache($cacheKey, $authenticate);
-
                 }
 
                 $this->default_address_id = $authenticate['default_address_id'];
@@ -287,19 +281,7 @@ class Collivery
     {
         $key = $this->getCacheKey($key);
 
-
-
         return $this->cache->put($key, $value, $ttl);
-    }
-
-    /**
-     * @return array
-     */
-    protected function getClient()
-    {
-        !$this->client && $this->init();
-
-        return $this->errorsOrResults($this->client);
     }
 
     /**
@@ -314,6 +296,16 @@ class Collivery
         }
 
         return $results;
+    }
+
+    /**
+     * @return array
+     */
+    protected function getClient()
+    {
+        !$this->client && $this->init();
+
+        return $this->errorsOrResults($this->client);
     }
 
     /**
@@ -438,7 +430,7 @@ class Collivery
             $this->setError($result['error_id'], $result['error']);
         }
 
-        if($this->hasErrors()){
+        if ($this->hasErrors()) {
             return $this->errorsOrResults();
         }
 
@@ -867,7 +859,6 @@ class Collivery
     {
         $cacheKey = 'services';
         $services = $this->getCache($cacheKey);
-
 
         if ($services) {
             return $this->errorsOrResults($services);
