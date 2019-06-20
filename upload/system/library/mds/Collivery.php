@@ -86,6 +86,7 @@ class Collivery
     {
         return array_key_exists('auth_error', $this->getErrors());
     }
+
     /**
      * @return $this
      * @throws \ReflectionException
@@ -1048,6 +1049,11 @@ class Collivery
     }
 }
 
+/**
+ * Class Cache
+ *
+ * @package Mds
+ */
 class Cache
 {
     private $cache_dir;
