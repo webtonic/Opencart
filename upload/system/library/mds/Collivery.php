@@ -80,6 +80,13 @@ class Collivery
     }
 
     /**
+     * @return bool
+     */
+    public function isAuthError()
+    {
+        return array_key_exists('auth_error', $this->getErrors());
+    }
+    /**
      * @return $this
      * @throws \ReflectionException
      */
