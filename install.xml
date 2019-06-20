@@ -1051,15 +1051,27 @@ protected  $collivery_fields = array(
                 <script type="text/javascript">
                     $(document)
                     .on('change', '[name="collivery_town"]', function(){
-                        var townId = $(this).val();
+                        var elem = $(this);
+                        var townId = elem.val();
+                        $(document).find('[name="city"]').val(elem.find('option:selected').text());
                         var url = `index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`;
                         $.get(url)
                             .done(function(response){
-                                $('[name="collivery_suburb"]').empty().html(response);
+                                if($(response).attr('value') !== 'auth'){
+                                   $('[name="collivery_suburb"]').empty().html(response);
+                                }else if(!$(document).find('#collivery-alert').length){
+                                    $('fieldset').prepend(`
+                                        <div id="collivery-alert" class="alert alert-danger">
+                                          <strong>Collivery.net</strong> Please contact admin to fix Collivery.net shipping extension.
+                                        </div>`);
+                                        console.error('Collivery Shipping Plugin Could Not Authenticate');
+                                }
                             }).fail(function(xhr, ajaxOptions, thrownError) {
                                 alert('Collivery suburbs could not be found!');
                                 console.log('Could not find collivery suburb, please check if this plugin is installed properly');
                             });
+                    }).ready(function(){
+                          $(document).find('[name="city"]').closest('.form-group').attr('hidden', true)
                     });
                 </script>
                 ]]>

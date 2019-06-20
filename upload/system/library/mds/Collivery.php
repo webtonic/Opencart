@@ -36,7 +36,7 @@ class Collivery
         $this->cacheEnabled = (bool)(isset($config['enable_cache']) ? $config['enable_cache'] : $this->cacheEnabled);
         $this->log = isset($config['log']) ? $config['log'] : new Log;
 
-        if (isset($config['demo']) && $config['demo']) {
+        if ((isset($config['demo']) && $config['demo']) || !$config['user_email']) {
             $config = array_merge($config, self::DEMO_ACCOUNT);
         }
 
@@ -350,6 +350,10 @@ class Collivery
 
         if (!isset($result['suburbs'])) {
             $this->setError('no_results', 'No suburbs returned by the server');
+        }
+
+        if($this->hasErrors()){
+            return $this->getErrors();
         }
 
         $suburbs = $result['suburbs'];
@@ -1175,7 +1179,7 @@ class Log{
 
     public function __construct()
     {
-       $this->logPath = basename(__DIR__);
+        $this->logPath = basename(__DIR__);
 
     }
 
