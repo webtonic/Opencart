@@ -34,7 +34,7 @@ class Collivery
         $config['cache_dir'] = isset($config['cache_dir']) ? $config['cache_dir'] : basename(__DIR__);
         $this->cache = $cache ?: new Cache($config['cache_dir']);
         $this->cacheEnabled = (bool)(isset($config['enable_cache']) ? $config['enable_cache'] : $this->cacheEnabled);
-        $this->log = isset($config['log']) ? $config['log'] : null;
+        $this->log = isset($config['log']) ? $config['log'] : new Log;
 
         if (isset($config['demo']) && $config['demo']) {
             $config = array_merge($config, self::DEMO_ACCOUNT);
@@ -1165,6 +1165,22 @@ class Cache
  * @package Mds
  */
 class Log{
+    private $logPath;
+
+    public function __construct()
+    {
+       $this->logPath = basename(__DIR__);
+
+    }
+
+    /**
+     * @param $message
+     */
+    public function message($message)
+    {
+        chmod($this->logPath, 0777);
+        file_put_contents($this->logPath . '/collivery.net_error_logs' . date('Ymd'), $message);
+    }
 
 }
 
