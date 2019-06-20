@@ -1152,5 +1152,13 @@ class Cache
     }
 }
 
+/**
+ * Class Log
+ *
+ * @package Mds
+ */
+class Log{
+
+}
 
 
