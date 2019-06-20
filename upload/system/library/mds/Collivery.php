@@ -1185,7 +1185,7 @@ class Log{
     public function message($message)
     {
         chmod($this->logPath, 0777);
-        file_put_contents($this->logPath . '/collivery.net_error_logs' . date('Ymd'), $message);
+        file_put_contents($this->logPath . '/collivery.net_error_logs' . date('Ymd'), "{$message}\n", FILE_APPEND);
     }
 
 }
