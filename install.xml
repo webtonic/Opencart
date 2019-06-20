@@ -63,6 +63,10 @@
             if(is_file($collivery_library)){
                 include_once $collivery_library;
                 $this->registry->set('collivery', new \Mds\Collivery($config));
+                $collivery = $this->registry->get('collivery');
+                if($collivery->authenticate() &&  $collivery->isAuthError()){
+                    $this->registry->set('error', array('warning' => 'Collivery.net Shipping Plugin Auth Error'));
+                }
             }
         }
         /** @endcollivery-config */
