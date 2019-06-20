@@ -40,6 +40,8 @@ class ControllerExtensionShippingMds extends Controller {
         }
         if (isset($this->error['warning'])) {
             $data['error_warning'] = $this->error['warning'];
+        }elseif($this->collivery->authenticate() && $this->collivery->isAuthError()){
+            $data['error_warning'] = 'Incorrect Username Or Password For Collivery.net Plugin';
         } else {
             $data['error_warning'] = '';
         }
