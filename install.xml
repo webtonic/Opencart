@@ -1235,6 +1235,7 @@ protected  $collivery_fields = array(
                 .closest('div.form-group.custom-field')
                     .remove();
         });
+        $('#input-shipping-city').closest('div.form-group').prop('hidden', 'hidden');
       })(['collivery_town', 'collivery_suburb', 'collivery_location_type']);
     })
     .on('click', '#dispatched-collivery-button', function(a){
@@ -1263,8 +1264,16 @@ protected  $collivery_fields = array(
         $('a[href="#tab-mds"]').tab('show');
     })
     .on('change', '[name="shipping_collivery_town"]', function(){
-      var townId = $(this).val();
+    var elem = $(this);
+      var townId = elem.val();
       $('[name="shipping_collivery_suburb"]').empty();
+
+      var city = $('#input-shipping-city');
+
+      city.closest('div.form-group').prop('hidden', 'hidden');
+
+      city.val(elem.find('option:selected').text());
+
       $.ajax({
         url: `{{ constant('HTTP_CATALOG') }}index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`,
         type: 'get',
