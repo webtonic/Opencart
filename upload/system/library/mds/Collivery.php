@@ -2,7 +2,6 @@
 
 namespace Mds;
 
-use GuzzleHttp\Exception\RequestException;
 use SoapClient;
 use SoapFault;
 
@@ -80,16 +79,7 @@ class Collivery
     }
 
     /**
-     * @return bool
-     */
-    public function isAuthError()
-    {
-        return array_key_exists('auth_error', $this->getErrors());
-    }
-
-    /**
      * @return $this
-     * @throws \ReflectionException
      */
     protected function init()
     {
@@ -101,31 +91,17 @@ class Collivery
                 );
             } catch (SoapFault $e) {
                 $this->catchSoapFault($e);
-            } catch (\ReflectionException $e) {
-                die($e->getMessage());
             }
         }
 
         return $this;
     }
 
-    /**
-     * @param SoapFault $e
-     *
-     * @throws \ReflectionException
-     */
     protected function catchSoapFault(SoapFault $e)
     {
         $this->setError($e->faultcode, $e->faultstring);
     }
 
-    /**
-     * @param        $id
-     * @param string $text
-     *
-     * @return $this
-     * @throws \ReflectionException
-     */
     protected function setError($id, $text = '')
     {
         if (is_array($id) && !empty($id)) {
@@ -143,8 +119,6 @@ class Collivery
 
     /**
      * @param $message
-     *
-     * @throws \ReflectionException
      */
     private function log($message)
     {
@@ -167,15 +141,14 @@ class Collivery
                         break; //exit
                     }
                 }
-            } catch (RequestException $e) {
+            } catch (\ReflectionException $e) {
                 die($e->getMessage());
             }
         }
     }
 
     /**
-     * @return $this|array
-     * @throws \ReflectionException
+     * @return $this
      */
     private function authenticate()
     {
@@ -208,7 +181,7 @@ class Collivery
 
         !$this->client && $this->init();
         if ($this->hasErrors()) {
-            return $this->getErrors();
+            return $this;
         }
 
         try {
@@ -234,7 +207,7 @@ class Collivery
             die($e->getMessage());
         }
 
-        return $this->errorsOrResults();
+        return $this;
     }
 
     /**
@@ -294,17 +267,11 @@ class Collivery
     }
 
     /**
-     * @param $results
-     *
-     * @return array
+     * @return bool
      */
-    private function errorsOrResults($results = null)
+    public function isAuthError()
     {
-        if (null === $results || $this->hasErrors()) {
-            return $this->getErrors();
-        }
-
-        return $results;
+        return array_key_exists('auth_error', $this->getErrors());
     }
 
     /**
@@ -314,15 +281,27 @@ class Collivery
     {
         !$this->client && $this->init();
 
-        return $this->errorsOrResults($this->client);
+        return $this->errorsOrResponse($this->client);
     }
 
     /**
-     * Returns all the suburbs of a town.
+     * @param $results
      *
-     * @param int $town_id ID of the Town to return suburbs for
+     * @return array
+     */
+    private function errorsOrResponse($results = null)
+    {
+        if (!$results || $this->hasErrors()) {
+            return $this->getErrors();
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param null $town_id
      *
-     * @return array|bool
+     * @return array|mixed|null
      */
     private function getAllSuburbs($town_id = null)
     {
@@ -352,7 +331,7 @@ class Collivery
             $this->setError('no_results', 'No suburbs returned by the server');
         }
 
-        if($this->hasErrors()){
+        if ($this->hasErrors()) {
             return $this->getErrors();
         }
 
@@ -361,7 +340,7 @@ class Collivery
             $this->setCache($cacheKey, $suburbs);
         }
 
-        return $this->errorsOrResults($suburbs);
+        return $this->errorsOrResponse($suburbs);
     }
 
     /**
@@ -434,7 +413,7 @@ class Collivery
             $this->setCache($cacheKey, $addresses);
         }
 
-        return $this->errorsOrResults($addresses);
+        return $this->errorsOrResponse($addresses);
     }
 
     /**
@@ -458,7 +437,13 @@ class Collivery
         }
 
         if ($this->hasErrors()) {
-            return $this->errorsOrResults();
+            return $this->errorsOrResponse();
+        }
+
+        if (!isset($result['pod'])) {
+            $this->setError('no_pod', 'No POD data returned');
+
+            return $this->errorsOrResponse();
         }
 
         $pod = $result['pod'];
@@ -467,7 +452,7 @@ class Collivery
             $this->setCache($cacheKey, $pod);
         }
 
-        return $this->errorsOrResults($pod);
+        return $this->errorsOrResponse($pod);
     }
 
     /**
@@ -476,20 +461,19 @@ class Collivery
      * will be provided. If delivered, the time and receivers name (if available)
      * with returned.
      *
-     * @param int $collivery_id Collivery ID
+     * @param int $colliveryId Collivery ID
      *
      * @return bool|array                 Collivery Status Information
-     * @throws \ReflectionException
      */
-    private function getStatus($collivery_id)
+    private function getStatus($colliveryId)
     {
-        $cacheKey = 'status.' . $this->client_id . $collivery_id;
+        $cacheKey = 'status.' . $this->client_id . $colliveryId;
         $status = $this->getCache($cacheKey);
         if ($status) {
             return $status;
         }
 
-        $result = $this->sendSoapRequest('get_collivery_status', [$collivery_id]);
+        $result = $this->sendSoapRequest('get_collivery_status', [$colliveryId]);
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
@@ -505,13 +489,14 @@ class Collivery
             $this->setCache($cacheKey, $result);
         }
 
-        return $this->errorsOrResults($result);
+        return $this->errorsOrResponse($result);
     }
 
     /**
      * @param array $data
      *
      * @return array
+     * @throws \ReflectionException
      */
     private function addAddress(array $data)
     {
@@ -555,22 +540,30 @@ class Collivery
 
             if (isset($result['error_id'])) {
                 $this->setError($result['error_id'], $result['error']);
+
+                return $this->errorsOrResponse();
             }
 
             if (!isset($result['address_id'])) {
                 $error = json_encode($result);
-                $this->setError('no address added',
+                $this->setError('error_adding_address',
                     "The address could not be added, data validated successfully, error ID not set $error");
+
+                return $this->errorsOrResponse();
             }
 
             $addressId = $result['address_id'];
+            if (isset($result['contact_id'])) {
+                list('contact_id' => $contactId) = current($this->getContacts($addressId));
 
-            list('contact_id' => $contactId) = current($this->getContacts($addressId));
+                return $this->errorsOrResponse(['address_id' => $addressId, 'contact_id' => $contactId]);
+            }
 
-            return $this->errorsOrResults(['address_id' => $addressId, 'contact_id' => $contactId]);
+            $this->setError('contacts_not_found', "The contacts for address '{$addressId}' not found");
+
         }
 
-        return $this->getErrors();
+        return $this->errorsOrResponse();
     }
 
     /**
@@ -600,7 +593,7 @@ class Collivery
             $this->setCache($cacheKey, $locationTypes);
         }
 
-        return $this->errorsOrResults($locationTypes);
+        return $this->errorsOrResponse($locationTypes);
     }
 
     /**
@@ -626,7 +619,7 @@ class Collivery
         }
 
         if (!isset($result['towns'])) {
-            $this->setError('no_results', 'No results returned by the server');
+            $this->setError('no_results', 'No towns returned by the server');
         }
 
         $towns = $result['towns'];
@@ -635,7 +628,7 @@ class Collivery
             $this->setCache($cacheKey, $towns);
         }
 
-        return $this->errorsOrResults($towns);
+        return $this->errorsOrResponse($towns);
     }
 
     /**
@@ -667,7 +660,7 @@ class Collivery
             $this->setCache($cacheKey, $contacts);
         }
 
-        return $this->errorsOrResults($contacts);
+        return $this->errorsOrResponse($contacts);
     }
 
     /**
@@ -740,7 +733,7 @@ class Collivery
             $this->setCache($cacheKey, $address);
         }
 
-        return $this->errorsOrResults($address);
+        return $this->errorsOrResponse($address);
     }
 
     /**
@@ -839,7 +832,7 @@ class Collivery
         }
 
         if ($this->hasErrors()) {
-            return $this->errorsOrResults();
+            return $this->errorsOrResponse();
         }
         $result = $this->sendSoapRequest('validate_collivery', [$data]);
 
@@ -851,7 +844,7 @@ class Collivery
             $this->setError('result_unexpected', 'No result returned.');
         }
 
-        return $this->errorsOrResults($result);
+        return $this->errorsOrResponse($result);
     }
 
     /**
@@ -875,7 +868,7 @@ class Collivery
             $this->setCache($cacheKey, $result);
         }
 
-        return $this->errorsOrResults($result);
+        return $this->errorsOrResponse($result);
     }
 
     /**
@@ -888,14 +881,14 @@ class Collivery
         $services = $this->getCache($cacheKey);
 
         if ($services) {
-            return $this->errorsOrResults($services);
+            return $this->errorsOrResponse($services);
         }
 
         $result = $this->sendSoapRequest('get_services');
         if (!isset($result['services'])) {
             $this->setError('No data return', 'Could not get services');
 
-            return $this->errorsOrResults();
+            return $this->errorsOrResponse();
         }
 
         list('services' => $services) = $result;
@@ -903,7 +896,7 @@ class Collivery
             $this->setCache($cacheKey, $services);
         }
 
-        return $this->errorsOrResults($services);
+        return $this->errorsOrResponse($services);
     }
 
     /**
@@ -1011,13 +1004,13 @@ class Collivery
     }
 
     /**
-     * @param $collivery_id
+     * @param $colliveryId
      *
      * @return array
      */
-    private function acceptCollivery($collivery_id)
+    private function acceptCollivery($colliveryId)
     {
-        $result = $this->sendSoapRequest('accept_collivery', [$collivery_id]);
+        $result = $this->sendSoapRequest('accept_collivery', [$colliveryId]);
 
         if (isset($result['error_id'])) {
             $this->setError($result['error_id'], $result['error']);
@@ -1188,13 +1181,13 @@ class Cache
  *
  * @package Mds
  */
-class Log{
+class Log
+{
     private $logPath;
 
     public function __construct()
     {
         $this->logPath = basename(__DIR__);
-
     }
 
     /**
@@ -1203,7 +1196,8 @@ class Log{
     public function message($message)
     {
         chmod($this->logPath, 0777);
-        file_put_contents($this->logPath . '/collivery.net_error_logs' . date('Ymd') .'.log', "{$message}\n", FILE_APPEND);
+        file_put_contents($this->logPath . '/collivery.net_error_logs' . date('Ymd') . '.log', "{$message}\n",
+            FILE_APPEND);
     }
 
 }
