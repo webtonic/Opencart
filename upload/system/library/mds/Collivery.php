@@ -372,23 +372,37 @@ class Collivery
      */
     private function sendSoapRequest($method, array $params = [])
     {
-
-
+        //We need to pass a token to the methods in the client
         if (!in_array($this->token, $params, true)) {
             $params[] = $this->token;
         }
 
+        //initialize client and check for errors
+        !$this->client && $this->init();
+
+        //Is there anything wrong with the client?
+        if ($this->hasErrors()) {
+            return $this->errorsOrResponse();
+        }
+
+        //Nothing wrong with soap then lets authenticate
+        $this->authenticate();
+
+        //Is there anything wrong with the credentials?
+        if ($this->hasErrors()) {
+            return $this->errorsOrResponse();
+        }
+
+        //No errors, lets try calling a method from our client
         try {
-            !$this->client && $this->init();
-
-            $this->authenticate();
-
-            return $this->client->{$method}(...$params);
+            return $this->client->{trim($method)}(...$params);
         } catch (SoapFault $e) {
+            //oops, something went wrong from the client, what is it?
             $this->catchSoapFault($e);
         }
 
-        return $this->errorsOrResults();
+        //What was wrong with the soap client?
+        return $this->errorsOrResponse();
     }
 
     /**
