@@ -260,7 +260,7 @@ class Collivery
      */
     private function getCacheKey($key)
     {
-        return strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key));
+        return md5(strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key)));
     }
 
     /**
