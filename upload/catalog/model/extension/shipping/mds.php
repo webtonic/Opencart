@@ -38,76 +38,79 @@ class ModelExtensionShippingMds extends Model
         $data['cover']            = $this->config->get('shipping_mds_insurance') ? 1 : 0;
         $data['rica']             = 0;
         $quote_data = array();
-        foreach ($this->collivery->getServices() as $key => $service) {
-            $data = $this->buildColliveryControlData( $address, $parcel);
-            $data['service'] = $key;
-            $add_days        = '';
-            if ($key == 5) {
-                $add_days = '+1 days'; //add 1 day
-            } elseif ($key == 3) {
-                $add_days = '+2 days'; //add 2 day
+
+        if(!$this->collivery->hasErrors()){
+            foreach ($this->collivery->getServices() as $key => $service) {
+                $data = $this->buildColliveryControlData( $address, $parcel);
+                $data['service'] = $key;
+                $add_days        = '';
+                if ($key == 5) {
+                    $add_days = '+1 days'; //add 1 day
+                } elseif ($key == 3) {
+                    $add_days = '+2 days'; //add 2 day
+                }
+                $data['collection_time']   = strtotime(date('d-m-Y 8:00', strtotime($add_days)));
+                $service_display_name      = $this->config->get('shipping_mds_service_display_name_' . $key);
+                $service_markup_percentage = $this->config->get('shipping_mds_service_surcharge_' . $key);
+
+
+
+                if ($this->config->get('shipping_mds_insurance')) {
+                    $data['cover'] = 1;
+                } else {
+                    $data['cover'] = 0;
+                }
+
+                if ($this->config->get('shipping_mds_rica')) {
+                    $data['rica'] = 1;
+                } else {
+                    $data['rica'] = 0;
+                }
+                $price                     = $this->getShippingCost($data);
+                $price_including_vat       = (int) $price['price']['inc_vat'];
+
+
+                switch (true) {
+                    case ($service_markup_percentage >= 0 && $service_markup_percentage <= 1):
+                        break;
+                    case ($service_markup_percentage >= 1 && $service_markup_percentage <= 100):
+                        $service_markup_percentage = (float) ($service_markup_percentage / 100);
+                        break;
+                    default:
+                        $service_markup_percentage = false;
+                        break;
+                }
+                /**
+                 * Display Price Formula: A = P(1+m)
+                 * A = $display_price
+                 * P = total price including VAT except client markup fee
+                 * m = Markup percentage
+                 */
+                $display_price    = $service_markup_percentage ? round($price_including_vat * (1 + $service_markup_percentage), 2) : $price_including_vat;
+                $quote_data[$key] = array(
+                    'code' => 'mds.' . $key,
+                    'title' => $service_display_name,
+                    'cost' => $display_price,
+                    'tax_class_id' => 0,
+                    'text' => 'R' . $display_price . ' VAT inclusive'
+                );
             }
-            $data['collection_time']   = strtotime(date('d-m-Y 8:00', strtotime($add_days)));
-            $service_display_name      = $this->config->get('shipping_mds_service_display_name_' . $key);
-            $service_markup_percentage = $this->config->get('shipping_mds_service_surcharge_' . $key);
-
-
-
-            if ($this->config->get('shipping_mds_insurance')) {
-                $data['cover'] = 1;
-            } else {
-                $data['cover'] = 0;
+            if ($quote_data) {
+                $method_data = array(
+                    'code' => 'mds',
+                    'title' => 'MDS Collivery.net',
+                    'quote' => $quote_data,
+                    'sort_order' => 1,
+                    'error' => ''
+                );
+                return $method_data;
             }
-
-            if ($this->config->get('shipping_mds_rica')) {
-                $data['rica'] = 1;
-            } else {
-                $data['rica'] = 0;
-            }
-            $price                     = $this->getShippingCost($data);
-            $price_including_vat       = (int) $price['price']['inc_vat'];
-
-
-            switch (true) {
-                case ($service_markup_percentage >= 0 && $service_markup_percentage <= 1):
-                    break;
-                case ($service_markup_percentage >= 1 && $service_markup_percentage <= 100):
-                    $service_markup_percentage = (float) ($service_markup_percentage / 100);
-                    break;
-                default:
-                    $service_markup_percentage = false;
-                    break;
-            }
-            /**
-             * Display Price Formula: A = P(1+m)
-             * A = $display_price
-             * P = total price including VAT except client markup fee
-             * m = Markup percentage
-             */
-            $display_price    = $service_markup_percentage ? round($price_including_vat * (1 + $service_markup_percentage), 2) : $price_including_vat;
-            $quote_data[$key] = array(
-                'code' => 'mds.' . $key,
-                'title' => $service_display_name,
-                'cost' => $display_price,
-                'tax_class_id' => 0,
-                'text' => 'R' . $display_price . ' VAT inclusive'
-            );
         }
 
-        $error = '';
-        if ($quote_data) {
-            $method_data = array(
-                'code' => 'mds',
-                'title' => 'MDS Collivery.net',
-                'quote' => $quote_data,
-                'sort_order' => 1,
-                'error' => $error
-            );
-            return $method_data;
-        } else {
-            Echo "Fail";
-            return false;
-        }
+        return $quote_data;
+
+
+
     }
     /**
      * @param $address

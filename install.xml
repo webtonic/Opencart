@@ -7,6 +7,73 @@
     <link>http://www.collivery.co.za</link>
     <!-- CONTROLLERS -->
     <!-- Admin Controllers -->
+    <file path="catalog/controller/checkout/shipping_method.php">
+        <operation>
+            <search>
+                <![CDATA[if (isset($this->session->data['shipping_methods'])) {]]>
+            </search>
+            <add position="before">
+                <![CDATA[
+        $collivery_method_available = false;
+		foreach ($this->session->data['shipping_methods'] as $method_array){
+		    if(isset($method_array['code']) && $method_array['code'] === 'mds' && count($method_array['quote'])) {
+                $collivery_method_available = true;
+                break;
+            }
+
+        }
+		if($collivery_method_available){
+            $data['error_warning'] = 'No Collivery.net Shipping Methods Available!';
+        }
+                ]]>
+            </add>
+        </operation>
+
+    </file>
+    <file path="system/engine/controller.php">
+        <operation>
+            <search>
+                <![CDATA[public function __get($key) {]]>
+            </search>
+            <add position="after">
+                <![CDATA[
+        /** @collivery-config */
+        if(!$this->registry->has('collivery')){
+            $query = $this->registry->get('db')->query("select u.value as username, p.value as password, d.value as is_demo from " . DB_PREFIX . "setting as p left join " . DB_PREFIX . "setting as u on(u.code=p.code) left join " . DB_PREFIX . "setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'");
+            if(!$query->num_rows){
+                $is_demo = true;
+                $username = '';
+                $password = '';
+            }else{
+                list('username' => $username, 'password' => $password, 'is_demo'=> $is_demo) = $query->row;
+            }
+            $config = array(
+                'log' => $this->registry->get('log'),
+                'cache_dir' => DIR_SYSTEM . '/library/cache/',
+                'app_name' => 'MDS Collivery.net',
+                'app_version' => '1.0.1',
+                'app_host' => 'Opencart ' . VERSION,
+                'app_url' => $_SERVER['HTTP_HOST'],
+                'user_email' => $username ,
+                'user_password' => $password,
+                'demo' =>  $is_demo
+            );
+
+            $collivery_library = DIR_SYSTEM . 'library/mds/Collivery.php';
+            if(is_file($collivery_library)){
+                include_once $collivery_library;
+                $this->registry->set('collivery', new \Mds\Collivery($config));
+                $collivery = $this->registry->get('collivery');
+                if($collivery->authenticate() &&  $collivery->isAuthError()){
+                    $this->registry->set('error', array('warning' => 'Collivery.net Shipping Plugin Auth Error'));
+                }
+            }
+        }
+        /** @endcollivery-config */
+                ]]>
+            </add>
+        </operation>
+    </file>
     <file path="catalog/model/checkout/order.php">
         <operation>
             <search>
@@ -15,19 +82,22 @@
             <add position="after">
                 <![CDATA[
         /** @collivery-data */
-        $default_address =  $this->collivery->getDefaultAddress();
-        $sql_data['collivery_from_address_id'] = $default_address['address']['address_id'];
-        $sql_data['collivery_from_contact_id'] = current($default_address['contacts'])['contact_id'];
+        if($this->collivery){
+            $default_address =  $this->collivery->getDefaultAddress();
+            $sql_data['collivery_from_address_id'] = $default_address['address']['address_id'];
+            $sql_data['collivery_from_contact_id'] = current($default_address['contacts'])['contact_id'];
 
-        if(isset($data['shipping_collivery_location_type'], $data['shipping_collivery_town'], $data['shipping_collivery_suburb'])){
-            $sql_data['collivery_location_type'] = $data['shipping_collivery_location_type'];
-            $sql_data['collivery_town'] = $data['shipping_collivery_town'];
-            $sql_data['collivery_suburb'] = $data['shipping_collivery_suburb'];
+            if(isset($data['shipping_collivery_location_type'], $data['shipping_collivery_town'], $data['shipping_collivery_suburb'])){
+                $sql_data['collivery_location_type'] = $data['shipping_collivery_location_type'];
+                $sql_data['collivery_town'] = $data['shipping_collivery_town'];
+                $sql_data['collivery_suburb'] = $data['shipping_collivery_suburb'];
+            }
+            $extra_sql = '';
+            foreach($sql_data as $column => $value){
+                $extra_sql .= $column ."='" . $value . "',";
+            }
         }
-        $extra_sql = '';
-        foreach($sql_data as $column => $value){
-            $extra_sql .= $column ."='" . $value . "',";
-        }
+
         /** @endcollivery-data */
                 ]]>
             </add>
@@ -59,7 +129,7 @@
             </search>
             <add position="replace">
                 <![CDATA[
-                    $order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];
+                $order_data['shipping_country_id'] = $this->session->data['shipping_address']['country_id'];
 				$order_data['shipping_collivery_town'] = $this->session->data['shipping_address']['collivery_town'];
 				$order_data['shipping_collivery_suburb'] = $this->session->data['shipping_address']['collivery_suburb'];
 				$order_data['shipping_collivery_location_type'] = $this->session->data['shipping_address']['collivery_location_type'];
@@ -353,18 +423,7 @@ protected  $collivery_fields = array(
                 <![CDATA[
     /** @collivery-data */
 
-        if (
-            isset($this->request->post['order_id']
-            , $this->request->post['collivery_location_type']
-            , $this->request->post['collivery_town']
-            , $this->request->post['collivery_suburb'])
-        ) {
-            $o = $this->request->post['order_id'];
-            $clt = $this->request->post['collivery_location_type'];
-            $ct = $this->request->post['collivery_town'];
-            $cs = $this->request->post['collivery_suburb'];
-            $this->db->query('update ' . DB_PREFIX ."order set collivery_location_type='$clt', collivery_town='$ct', collivery_suburb='$cs' where order_id='$o'");
-        }
+
         list($code, $service_type_id) = explode('.', $data['shipping_code']);
         $data['is_mds'] = $code == 'mds';
         $location_types = $this->collivery->getLocationTypes();
@@ -434,7 +493,7 @@ protected  $collivery_fields = array(
             if($data['collivery_town']){
                 $data['town'] = $towns[$data['collivery_town']];
             }
-            if($data['collivery_suburb']){
+            if(!empty($suburbs) && isset($data['collivery_suburb'])){
                 $data['suburb'] = $suburbs[$data['collivery_suburb']];
             }
             if($data['collivery_location_type']){
@@ -481,6 +540,7 @@ protected  $collivery_fields = array(
                     public function getTownSuburbs() {
                         $townId = $this->request->get['town_id'];
                         $respond = "";
+
                         foreach ($this->collivery->getSuburbs($townId) as $key => $sub) {
                             $respond .= '<option value="'.$key.'">'. $sub .'</option>';
                         }
@@ -991,15 +1051,27 @@ protected  $collivery_fields = array(
                 <script type="text/javascript">
                     $(document)
                     .on('change', '[name="collivery_town"]', function(){
-                        var townId = $(this).val();
+                        var elem = $(this);
+                        var townId = elem.val();
+                        $(document).find('[name="city"]').val(elem.find('option:selected').text());
                         var url = `index.php?route=checkout/checkout/getTownSuburbs&town_id=${townId}`;
                         $.get(url)
                             .done(function(response){
-                                $('[name="collivery_suburb"]').empty().html(response);
+                                if($(response).attr('value') !== 'auth'){
+                                   $('[name="collivery_suburb"]').empty().html(response);
+                                }else if(!$(document).find('#collivery-alert').length){
+                                    $('fieldset').prepend(`
+                                        <div id="collivery-alert" class="alert alert-danger">
+                                          <strong>Collivery.net</strong> Please contact admin to fix Collivery.net shipping extension.
+                                        </div>`);
+                                        console.error('Collivery Shipping Plugin Could Not Authenticate');
+                                }
                             }).fail(function(xhr, ajaxOptions, thrownError) {
                                 alert('Collivery suburbs could not be found!');
                                 console.log('Could not find collivery suburb, please check if this plugin is installed properly');
                             });
+                    }).ready(function(){
+                          $(document).find('[name="city"]').closest('.form-group').attr('hidden', true)
                     });
                 </script>
                 ]]>
@@ -1313,7 +1385,7 @@ protected  $collivery_fields = array(
                 <![CDATA[
             /** @collivery-data **/
 
-                if($this->collivery){
+                if($this->collivery && !$this->collivery->hasErrors()){
                     if($custom_field['name'] === 'Location Type' || $custom_field['name'] === 'Town' || $custom_field['name'] === 'Suburb'){
                         $custom_field_value_query->rows = array();
                         if($custom_field['name'] == 'Location Type'){
@@ -1360,7 +1432,7 @@ protected  $collivery_fields = array(
             /** @collivery-data **/
         $query = $this->db->query("select * from " . DB_PREFIX . "custom_field_description where custom_field_id={$custom_field_id}");
         if($query->num_rows){
-            if($query->row['name'] === 'Town' || $query->row['name'] === 'Suburb' || $query->row['name'] === 'Location Type'){
+            if($query->row['name'] === 'Town' || $query->row['name'] === 'Suburb' || $query->row['name'] === 'Location Type' && $this->collivery && !$this->collivery->hasErrors()){
                 $locationtype = $this->collivery->getLocationTypes();
                 $town = $this->collivery->getTowns();
                 $suburb = $this->collivery->getAllSuburbs();

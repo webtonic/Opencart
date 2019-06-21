@@ -40,6 +40,8 @@ class ControllerExtensionShippingMds extends Controller {
         }
         if (isset($this->error['warning'])) {
             $data['error_warning'] = $this->error['warning'];
+        }elseif($this->collivery->authenticate() && $this->collivery->isAuthError()){
+            $data['error_warning'] = 'Incorrect Username Or Password For Collivery.net Plugin';
         } else {
             $data['error_warning'] = '';
         }
@@ -188,46 +190,12 @@ class ControllerExtensionShippingMds extends Controller {
                    </div>';
             die($div);
         }
-        $main_controller = DIR_SYSTEM . 'engine/controller.php';
-        if(is_file($main_controller)){
-            $opencart_controller = file_get_contents($main_controller);
-            $pattern = '/\$.*registry\W.*=.*\$registry;/';
-            $replacement = "\$this->registry = \$registry;\n\t\t/** @collivery-config */\n\t\t\$collivery_query = \$registry->get('db')->query(\"select u.value as username, p.value as password, d.value as is_demo from \" . DB_PREFIX . \"setting as p left join \" . DB_PREFIX . \"setting as u on(u.code=p.code) left join \" . DB_PREFIX . \"setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'\");\n";
-            $replacement .= "\t\t\$demo_auth = array('username' => 'api@collivery.co.za', 'password' => 'api123', 'is_demo' => true);";
-            $replacement .="\n\t\tif(\$collivery_query->num_rows && !((bool) \$collivery_query->row['is_demo'])){";
-            $replacement .="\n\t\t\tlist('username' => \$username, 'password' => \$password, 'is_demo'=> \$is_demo) = \$collivery_query->row;\n";
-            $replacement .="\t\t}else{\n\t\t\tlist('username' => \$username, 'password' => \$password, 'is_demo' => \$is_demo) = \$demo_auth;\n\t\t}\n";
-            $replacement .="\t\t\$config = array(\n\t\t\t'log' => \$this->log,\n\t\t\t'app_name' => 'Collivery_net/Opencart',\n\t\t\t'app_version' => '1.0.1',\n\t\t\t'app_host' => 'Opencart ' . VERSION,\n\t\t\t'app_url' => \$_SERVER['HTTP_HOST'],\n";
-            $replacement .="\t\t\t'user_email' => \$username ,\n\t\t\t'user_password' => \$password,\n\t\t\t'demo' => (bool) \$is_demo\n\t\t);\n";
-            $replacement .="\n\t\tforeach (\$config as \$key => \$value){\n\t\t\t\$this->registry->set('collivery_config_' . \$key, \$value);\n\t\t}\n\t\t\$collivery_library = DIR_SYSTEM . 'library/mds/Collivery.php';\n";
-            $replacement .="\t\tif(is_file(\$collivery_library)){\n\t\t\tinclude_once \$collivery_library;\n\t\t\t\$this->collivery = new \Mds\Collivery(\$config);";
-            $replacement .="\t\t}\n";
-            $replacement .="\t/** @endcollivery-config */";
-            $existing = '/\/\*\*.@collivery.*\*\/.*@endcollivery.*\*\//s';
-            if(preg_match($existing, $opencart_controller) === 1){
-                $opencart_controller = preg_replace($existing, '', $opencart_controller);
-            }
 
-            $data = preg_replace($pattern, $replacement, $opencart_controller);
-            file_put_contents($main_controller, $data);
-
-            $this->model_setting_event->installColliveryShippingPlugin();
-        }
         $this->model_setting_event->installColliveryShippingPlugin();
 
     }
 
     public function uninstall(){
         $this->model_setting_event->uninstallColliveryShippingPlugin();
-        $main_controller = DIR_SYSTEM . 'engine/controller.php';
-        if(is_file($main_controller)) {
-            $opencart_controller = file_get_contents($main_controller);
-            $existing = '/\/\*\*.@collivery.*\*\/.*@endcollivery.*\*\//s';
-            if (preg_match($existing, $opencart_controller) === 1) {
-                $opencart_controller = preg_replace($existing, '', $opencart_controller);
-            }
-            file_put_contents($main_controller, $opencart_controller);
-        }
-
     }
 }
