@@ -41,7 +41,6 @@ class Collivery
 
         $this->config = (object)$config;
     }
-
     /**
      * Any method called from this class goes via the magic call
      * We want to make sure that we clear all errors that were generated
@@ -67,21 +66,10 @@ class Collivery
 
         return $this->getErrors() ?: call_user_func_array([$this, $method], $args);
     }
-
     /**
      * @return $this
      */
-    private function clearErrors()
-    {
-        $this->errors = [];
-
-        return $this;
-    }
-
-    /**
-     * @return $this
-     */
-    protected function init()
+    public function init()
     {
         if (!$this->client) {
             try {
@@ -96,61 +84,10 @@ class Collivery
 
         return $this;
     }
-
-    protected function catchSoapFault(SoapFault $e)
-    {
-        $this->setError($e->faultcode, $e->faultstring);
-    }
-
-    protected function setError($id, $text = '')
-    {
-        if (is_array($id) && !empty($id)) {
-            foreach ($id as $key => $val) {
-                $this->setError($key, $val);
-            }
-        } elseif (is_string($id) || is_int($id)) {
-            $this->errors[$id] = $text;
-            $json = json_encode(['id' => $id, 'message' => $text]);
-            $this->log($json);
-        }
-
-        return $this;
-    }
-
-    /**
-     * @param $message
-     */
-    private function log($message)
-    {
-        if (is_array($message)) {
-            foreach ($message as $value) {
-                $this->log($value);
-            }
-
-            return;
-        }
-        if (property_exists($this, 'log')) {
-
-            try {
-                $reflectionClass = new \ReflectionClass($this->log);
-                $message = "collivery_net_error: {$message}"; //message to be logged
-
-                foreach (['write', 'message'] as $method) {
-                    if ($reflectionClass->hasMethod($method)) {
-                        $this->log->{$method}($message);
-                        break; //exit
-                    }
-                }
-            } catch (\ReflectionException $e) {
-                die($e->getMessage());
-            }
-        }
-    }
-
     /**
      * @return $this
      */
-    private function authenticate()
+    public function authenticate()
     {
         $cacheKey = 'auth';
         $auth = $this->getCache($cacheKey);
@@ -209,13 +146,84 @@ class Collivery
 
         return $this;
     }
+    /**
+     * @return bool
+     */
+    public function isAuthError()
+    {
+        return array_key_exists('auth_error', $this->getErrors());
+    }
+    /**
+     * @return $this
+     */
+    public function clearErrors()
+    {
+        $this->errors = [];
 
+        return $this;
+    }
+    /**
+     * @param SoapFault $e
+     */
+    public function catchSoapFault(SoapFault $e)
+    {
+        $this->setError($e->faultcode, $e->faultstring);
+    }
+    /**
+     * @param        $id
+     * @param string $text
+     *
+     * @return $this
+     */
+    public function setError($id, $text = '')
+    {
+        if (is_array($id) && !empty($id)) {
+            foreach ($id as $key => $val) {
+                $this->setError($key, $val);
+            }
+        } elseif (is_string($id) || is_int($id)) {
+            $this->errors[$id] = $text;
+            $json = json_encode(['id' => $id, 'message' => $text]);
+            $this->log($json);
+        }
+
+        return $this;
+    }
+    /**
+     * @param $message
+     */
+    public function log($message)
+    {
+        if (is_array($message)) {
+            foreach ($message as $value) {
+                $this->log($value);
+            }
+
+            return;
+        }
+        if (property_exists($this, 'log')) {
+
+            try {
+                $reflectionClass = new \ReflectionClass($this->log);
+                $message = "collivery_net_error: {$message}"; //message to be logged
+
+                foreach (['write', 'message'] as $method) {
+                    if ($reflectionClass->hasMethod($method)) {
+                        $this->log->{$method}($message);
+                        break; //exit
+                    }
+                }
+            } catch (\ReflectionException $e) {
+                die($e->getMessage());
+            }
+        }
+    }
     /**
      * @param $key
      *
      * @return mixed|null
      */
-    private function getCache($key)
+    public function getCache($key)
     {
         $key = $this->getCacheKey($key);
 
@@ -225,33 +233,29 @@ class Collivery
 
         return null;
     }
-
     /**
      * @param $key
      *
      * @return string
      */
-    private function getCacheKey($key)
+    public function getCacheKey($key)
     {
         return md5(strtolower(self::CACHE_PREFIX . str_replace(self::CACHE_PREFIX, '', $key)));
     }
-
     /**
      * @return bool
      */
-    private function hasErrors()
+    public function hasErrors()
     {
         return !empty($this->getErrors());
     }
-
     /**
      * @return array
      */
-    private function getErrors()
+    public function getErrors()
     {
         return $this->errors;
     }
-
     /**
      * @param     $key
      * @param     $value
@@ -259,37 +263,58 @@ class Collivery
      *
      * @return mixed
      */
-    private function setCache($key, $value, $ttl = 10080)
+    public function setCache($key, $value, $ttl = 10080)
     {
         $key = $this->getCacheKey($key);
 
         return $this->cache->put($key, $value, $ttl);
     }
-
-    /**
-     * @return bool
-     */
-    public function isAuthError()
-    {
-        return array_key_exists('auth_error', $this->getErrors());
-    }
-
     /**
      * @return array
      */
-    protected function getClient()
+    public function getClient()
     {
         !$this->client && $this->init();
 
         return $this->errorsOrResponse($this->client);
     }
+    /**
+     * @param $key
+     *
+     * @return bool
+     */
+    public function removeCache($key)
+    {
+        if ($this->getCache($key)) {
+            $this->cache->forget($key);
+        }
 
+        return !$this->getCache($key);
+    }
+    /**
+     * @return $this
+     */
+    public function disableCache()
+    {
+        $this->cacheEnabled = false;
+
+        return $this;
+    }
+    /**
+     * @return $this
+     */
+    public function enableCache()
+    {
+        $this->cacheEnabled = true;
+
+        return $this;
+    }
     /**
      * @param $results
      *
      * @return array
      */
-    private function errorsOrResponse($results = null)
+    public function errorsOrResponse($results = null)
     {
         if (!$results || $this->hasErrors()) {
             return $this->getErrors();
@@ -297,7 +322,46 @@ class Collivery
 
         return $results;
     }
+    /**
+     * @param       $method
+     * @param array $params
+     *
+     * @return array
+     */
+    public function sendSoapRequest($method, array $params = [])
+    {
+        //We need to pass a token to the methods in the client
+        if (!in_array($this->token, $params, true)) {
+            $params[] = $this->token;
+        }
 
+        //initialize client and check for errors
+        !$this->client && $this->init();
+
+        //Is there anything wrong with the client?
+        if ($this->hasErrors()) {
+            return $this->errorsOrResponse();
+        }
+
+        //Nothing wrong with soap then lets authenticate
+        $this->authenticate();
+
+        //Is there anything wrong with the credentials?
+        if ($this->hasErrors()) {
+            return $this->errorsOrResponse();
+        }
+
+        //No errors, lets try calling a method from our client
+        try {
+            return $this->client->{trim($method)}(...$params);
+        } catch (SoapFault $e) {
+            //oops, something went wrong from the client, what is it?
+            $this->catchSoapFault($e);
+        }
+
+        //What was wrong with the soap client?
+        return $this->errorsOrResponse();
+    }
     /**
      * @param null $town_id
      *
@@ -307,7 +371,6 @@ class Collivery
     {
         return $this->getSuburbs($town_id);
     }
-
     /**
      * @param $town_id
      *
@@ -342,48 +405,6 @@ class Collivery
 
         return $this->errorsOrResponse($suburbs);
     }
-
-    /**
-     * @param       $method
-     * @param array $params
-     *
-     * @return array
-     */
-    private function sendSoapRequest($method, array $params = [])
-    {
-        //We need to pass a token to the methods in the client
-        if (!in_array($this->token, $params, true)) {
-            $params[] = $this->token;
-        }
-
-        //initialize client and check for errors
-        !$this->client && $this->init();
-
-        //Is there anything wrong with the client?
-        if ($this->hasErrors()) {
-            return $this->errorsOrResponse();
-        }
-
-        //Nothing wrong with soap then lets authenticate
-        $this->authenticate();
-
-        //Is there anything wrong with the credentials?
-        if ($this->hasErrors()) {
-            return $this->errorsOrResponse();
-        }
-
-        //No errors, lets try calling a method from our client
-        try {
-            return $this->client->{trim($method)}(...$params);
-        } catch (SoapFault $e) {
-            //oops, something went wrong from the client, what is it?
-            $this->catchSoapFault($e);
-        }
-
-        //What was wrong with the soap client?
-        return $this->errorsOrResponse();
-    }
-
     /**
      * @param array $filter
      *
@@ -415,7 +436,6 @@ class Collivery
 
         return $this->errorsOrResponse($addresses);
     }
-
     /**
      * @param $colliveryId
      *
@@ -454,7 +474,6 @@ class Collivery
 
         return $this->errorsOrResponse($pod);
     }
-
     /**
      * Returns the status tracking detail of a given Waybill number.
      * If the collivery is still active, the estimated time of delivery
@@ -491,7 +510,6 @@ class Collivery
 
         return $this->errorsOrResponse($result);
     }
-
     /**
      * @param array $data
      *
@@ -565,7 +583,6 @@ class Collivery
 
         return $this->errorsOrResponse();
     }
-
     /**
      * @return array|mixed|null
      */
@@ -595,7 +612,6 @@ class Collivery
 
         return $this->errorsOrResponse($locationTypes);
     }
-
     /**
      * @param string $country
      * @param null   $province
@@ -630,7 +646,6 @@ class Collivery
 
         return $this->errorsOrResponse($towns);
     }
-
     /**
      * @param $address_id
      *
@@ -662,7 +677,6 @@ class Collivery
 
         return $this->errorsOrResponse($contacts);
     }
-
     /**
      * @param array $data
      *
@@ -703,7 +717,6 @@ class Collivery
 
         return $this;
     }
-
     /**
      * @param $address_id
      *
@@ -735,23 +748,9 @@ class Collivery
 
         return $this->errorsOrResponse($address);
     }
-
-    /**
-     * @param $key
-     *
-     * @return bool
-     */
-    public function removeCache($key)
-    {
-        if ($this->getCache($key)) {
-            $this->cache->forget($key);
-        }
-
-        return !$this->getCache($key);
-    }
-
     /**
      * @return array
+     * @throws \ReflectionException
      */
     private function getDefaultAddress()
     {
@@ -763,7 +762,6 @@ class Collivery
             'contacts'           => $this->getContacts($default_address_id),
         ];
     }
-
     /**
      * Returns the clients default address
      *
@@ -773,7 +771,6 @@ class Collivery
     {
         return $this->default_address_id;
     }
-
     /**
      * Validate Collivery
      * Returns the validated data array of all details pertaining to a
@@ -787,6 +784,7 @@ class Collivery
      * @param array $data Properties of the new Collivery
      *
      * @return array         The validated data
+     * @throws \ReflectionException
      */
     private function validate(array $data)
     {
@@ -846,7 +844,6 @@ class Collivery
 
         return $this->errorsOrResponse($result);
     }
-
     /**
      * @return array|null
      */
@@ -870,7 +867,6 @@ class Collivery
 
         return $this->errorsOrResponse($result);
     }
-
     /**
      * @return array
      * @throws \ReflectionException
@@ -898,7 +894,6 @@ class Collivery
 
         return $this->errorsOrResponse($services);
     }
-
     /**
      * @param array $data
      *
@@ -912,7 +907,6 @@ class Collivery
 
         return $this->getErrors();
     }
-
     /**
      * @param array $data
      *
@@ -941,11 +935,11 @@ class Collivery
 
         return empty($this->errors);
     }
-
     /**
      * @param array $data
      *
      * @return array|mixed
+     * @throws \ReflectionException
      */
     private function addCollivery(array $data)
     {
@@ -1002,7 +996,6 @@ class Collivery
 
         return $result['collivery_id'];
     }
-
     /**
      * @param $colliveryId
      *
@@ -1028,27 +1021,6 @@ class Collivery
 
         return ['status' => $result['result']];
     }
-
-    /**
-     * @return $this
-     */
-    private function disableCache()
-    {
-        $this->cacheEnabled = false;
-
-        return $this;
-    }
-
-    /**
-     * @return $this
-     */
-    private function enableCache()
-    {
-        $this->cacheEnabled = true;
-
-        return $this;
-    }
-
     /**
      * @param $waybillId
      *
