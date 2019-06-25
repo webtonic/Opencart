@@ -71,7 +71,7 @@ class Collivery
      */
     public function init()
     {
-        if (!$this->client) {
+        if (!$this->client || !($this->client instanceof SoapClient)) {
             try {
                 $this->client = new SoapClient( // Setup the soap client
                     self::ENDPOINT, // URL to WSDL File
