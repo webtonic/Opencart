@@ -7,7 +7,7 @@ use SoapFault;
 
 class Collivery
 {
-    const ENDPOINT = 'http://ops.collivery.local/webservice.php?wsdl';
+    const ENDPOINT = 'https://collivery.co.za/wsdl/v2';
     const DEMO_ACCOUNT = ['user_email' => 'api@collivery.co.za', 'user_password' => 'api123'];
     const CACHE_PREFIX = 'collivery_net.';
     protected $token;
