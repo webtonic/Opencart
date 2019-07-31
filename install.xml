@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <modification>
-    <name>Collivery.net Extension v3.0.3.1</name>
+    <name>Collivery.net Extension v3.0.3.x</name>
     <code>mds</code>
-    <version>1</version>
+    <version>1.0.2</version>
     <author>MDS Tech</author>
-    <link>http://www.collivery.co.za</link>
+    <link>https://collivery.net</link>
     <!-- CONTROLLERS -->
     <!-- Admin Controllers -->
     <file path="catalog/controller/checkout/shipping_method.php">
