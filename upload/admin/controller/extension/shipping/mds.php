@@ -1,9 +1,21 @@
 <?php
 
 /**
- * Class ControllerExtensionShippingMds
- *
- * @property ModelSettingEvent $model_setting_event
+ * @property \ModelSettingEvent         $model_setting_event
+ * @property \ModelSettingSetting       $model_setting_setting
+ * @property \ModelLocalisationGeoZone  $model_localisation_geo_zone
+ * @property \ModelLocalisationTaxClass $model_localisation_tax_class
+ * @property \Loader                    $load
+ * @property \Document                  $document
+ * @property \Request                   $request
+ * @property \Session                   $session
+ * @property \Response                  $response
+ * @property \Language                  $language
+ * @property \Url                       $url
+ * @property \Config                    $config
+ * @property \Log                       $log
+ * @property \Cart\User                 $user
+ * @property \Mds\Collivery             $collivery
  */
 class ControllerExtensionShippingMds extends Controller {
     private $error = array();
