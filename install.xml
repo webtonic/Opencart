@@ -218,7 +218,7 @@
                             AND `TABLE_SCHEMA` = '".DB_DATABASE."'
                             AND `COLUMN_NAME` = '{$field}';");
                     if (!$existsQuery->num_rows) {
-                        $this->db->query(ALTER TABLE `".DB_PREFIX."{$table}` ADD `{$field}` VARCHAR(255) NULL DEFAULT NULL;");
+                        $this->db->query("ALTER TABLE `".DB_PREFIX."{$table}` ADD `{$field}` VARCHAR(255) NULL DEFAULT NULL;");
                     }
                 }
             }
