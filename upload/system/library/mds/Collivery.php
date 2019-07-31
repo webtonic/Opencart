@@ -1120,8 +1120,8 @@ class Cache
 
     public function put($name, $value, $time = 1440)
     {
-        $cache = json_encode(['value' => $value, 'valid' => time() + ($time * 60)]);
-        if (file_put_contents($this->cache_dir . $name, $cache)) {
+        $cache = ['value' => $value, 'valid' => time() + ($time * 60)];
+        if (file_put_contents($this->cache_dir . $name, json_encode($cache))) {
             $this->cache[$name] = $cache;
 
             return true;
@@ -1137,8 +1137,8 @@ class Cache
      */
     public function forget($name)
     {
-        $cache = json_encode(['value' => '', 'valid' => 0]);
-        if (file_put_contents($this->cache_dir . $name, $cache)) {
+        $cache = ['value' => '', 'valid' => 0];
+        if (file_put_contents($this->cache_dir . $name, json_encode($cache))) {
             $this->cache[$name] = $cache;
 
             return true;
