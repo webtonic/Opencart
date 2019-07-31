@@ -1,10 +1,8 @@
 <?php
-use Mds\Collivery;
+
 use Mds\MdsAddress\MdsAddress;
 use Mds\MdsColliveryService;
-/**
- * Class ModelExtensionShippingMds
- */
+
 class ModelExtensionShippingMds extends Model
 {
     /**

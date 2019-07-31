@@ -25,15 +25,17 @@ class ControllerExtensionShippingMds extends Controller {
         $this->load->model('setting/event');
         $this->load->model('setting/setting');
         $this->document->setTitle($this->language->get('heading_title'));
+
         if (strtoupper($this->request->server['REQUEST_METHOD']) === 'POST') {
             $this->model_setting_setting->editSetting('shipping_mds', $this->request->post);
             $this->session->data['success'] = $this->language->get('text_success');
             $this->response->redirect($this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], 'SSL'));
         }
-        $data             = $this->language->all();
 
-        $services         = $this->collivery->getServices();
+        $data = $this->language->all();
+        $services = $this->collivery->getServices();
         $data['services'] = $services;
+
         foreach ($services as $key => $service) {
             if (isset($this->request->post['shipping_mds_service_display_name_' . $key])) {
                 $data['shipping_mds_service_display_name_' . $key] = $this->request->post['shipping_mds_service_display_name_' . $key];
@@ -93,8 +95,9 @@ class ControllerExtensionShippingMds extends Controller {
             'text' => $this->language->get('heading_title'),
             'href' => $this->url->link('shipping/mds', 'user_token=' . $this->session->data['user_token'], 'SSL')
         );
-        $data['action']        = $this->url->link('extension/shipping/mds', 'user_token=' . $this->session->data['user_token'], 'SSL');
-        $data['cancel']        = $this->url->link('extension/shipping', 'user_token=' . $this->session->data['user_token'], 'SSL');
+        $data['action'] = $this->url->link('extension/shipping/mds', 'user_token='.$this->session->data['user_token'], 'SSL');
+        $data['cancel'] = $this->url->link('extension/shipping', 'user_token='.$this->session->data['user_token'], 'SSL');
+
         if (isset($this->request->post['shipping_mds_username'])) {
             $data['shipping_mds_username'] = $this->request->post['shipping_mds_username'];
         } else {
@@ -136,8 +139,10 @@ class ControllerExtensionShippingMds extends Controller {
         } else {
             $data['shipping_mds_tax_class_id'] = $this->config->get('shipping_mds_tax_class_id');
         }
+
         $this->load->model('localisation/tax_class');
         $data['tax_classes'] = $this->model_localisation_tax_class->getTaxClasses();
+
         if (isset($this->request->post['shipping_mds_geo_zone_id'])) {
             $data['shipping_mds_geo_zone_id'] = $this->request->post['shipping_mds_geo_zone_id'];
         } else {
@@ -155,8 +160,6 @@ class ControllerExtensionShippingMds extends Controller {
         $data['default_collivery_from_addresses'] = array();
         $data['default_address_id'] = $this->collivery->getDefaultAddressId();
         $data['user_token'] = $this->request->get['user_token'];
-
-
 
         $this->load->model('localisation/geo_zone');
         $data['geo_zones']   = $this->model_localisation_geo_zone->getGeoZones();
@@ -204,7 +207,6 @@ class ControllerExtensionShippingMds extends Controller {
         }
 
         $this->model_setting_event->installColliveryShippingPlugin();
-
     }
 
     public function uninstall(){
