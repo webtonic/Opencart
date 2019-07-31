@@ -8,8 +8,10 @@ use SoapFault;
 class Collivery
 {
     const ENDPOINT = 'https://collivery.co.za/wsdl/v2';
-    const DEMO_ACCOUNT = ['user_email' => 'api@collivery.co.za', 'user_password' => 'api123'];
     const CACHE_PREFIX = 'collivery_net.';
+
+    private static $demoAccount = ['user_email' => 'api@collivery.co.za', 'user_password' => 'api123'];
+
     protected $token;
     protected $client;
     protected $config;
@@ -36,7 +38,7 @@ class Collivery
         $this->log = isset($config['log']) ? $config['log'] : new Log;
 
         if ((isset($config['demo']) && $config['demo']) || !$config['user_email']) {
-            $config = array_merge($config, self::DEMO_ACCOUNT);
+            $config = array_merge($config, self::$demoAccount);
         }
 
         $this->config = (object)$config;
@@ -247,7 +249,9 @@ class Collivery
      */
     public function hasErrors()
     {
-        return !empty($this->getErrors());
+        $errors = $this->getErrors();
+
+        return !empty($errors);
     }
     /**
      * @return array
@@ -353,7 +357,9 @@ class Collivery
 
         //No errors, lets try calling a method from our client
         try {
-            return $this->client->{trim($method)}(...$params);
+            $token = array_shift($params);
+
+            return $this->client->{trim($method)}($token, $params);
         } catch (SoapFault $e) {
             //oops, something went wrong from the client, what is it?
             $this->catchSoapFault($e);
