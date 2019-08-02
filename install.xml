@@ -39,13 +39,25 @@
                 <![CDATA[
         /** @collivery-config */
         if(!$this->registry->has('collivery')){
-            $query = $this->registry->get('db')->query("select u.value as username, p.value as password, d.value as is_demo from " . DB_PREFIX . "setting as p left join " . DB_PREFIX . "setting as u on(u.code=p.code) left join " . DB_PREFIX . "setting as d on(d.code=p.code) where u.code='shipping_mds' and p.code='shipping_mds' and p.code='shipping_mds_is_demo' and u.key='shipping_mds_username' and p.key='shipping_mds_password'");
-            if(!$query->num_rows){
+            $query = $this->registry->get('db')->query("SELECT
+                   p.value AS '0',
+                   u.value AS '1',
+                   d.value AS '2'
+            FROM `".DB_PREFIX."setting` AS p
+            LEFT JOIN `".DB_PREFIX."setting` AS u on(u.`code` = p.`code`)
+            LEFT JOIN `".DB_PREFIX."setting` AS d on(d.`code` = p.`code`)
+            WHERE p.`code`='shipping_mds'
+              AND u.`code`='shipping_mds'
+              AND d.`code`='shipping_mds'
+              AND p.`key`='shipping_mds_password'
+              AND u.`key`='shipping_mds_username'
+              AND d.`key`='shipping_mds_is_demo'");
+            if (!$query->num_rows) {
                 $is_demo = true;
                 $username = '';
                 $password = '';
-            }else{
-                list('username' => $username, 'password' => $password, 'is_demo'=> $is_demo) = $query->row;
+            } else {
+                list($password, $username, $is_demo) = $query->row;
             }
             $config = array(
                 'log' => $this->registry->get('log'),
@@ -206,7 +218,7 @@
                             AND `TABLE_SCHEMA` = '".DB_DATABASE."'
                             AND `COLUMN_NAME` = '{$field}';");
                     if (!$existsQuery->num_rows) {
-                        $this->db->query(ALTER TABLE `".DB_PREFIX."{$table}` ADD `{$field}` VARCHAR(255) NULL DEFAULT NULL;");
+                        $this->db->query("ALTER TABLE `".DB_PREFIX."{$table}` ADD `{$field}` VARCHAR(255) NULL DEFAULT NULL;");
                     }
                 }
             }
