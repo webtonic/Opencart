@@ -511,7 +511,6 @@
                 $data['location_type'] = $location_types[$data['collivery_location_type']];
             }
             if($data['waybill_id']){
-                //$data['waybill_info'] = $this->collivery->getColliveryStatus($data['waybill_id']);
                 $data['waybill_status'] = $this->collivery->getStatus($data['waybill_id']);
                 $data['waybill_pod'] = $this->collivery->getPod($data['waybill_id']);
                 $data['waybill_enc'] = (string) base64_encode ($data['waybill_id']);
@@ -830,7 +829,6 @@
                             }
                        });
                       if(!errors.length){
-                        //$('#yes-create-mds-address').click();
                         $.ajax({
                               url : `index.php?route=sale/order/createColliveryAddress&user_token=${window.user_token}&order_id={{ order_id }}`,
                               method:'post',
@@ -1255,9 +1253,6 @@
     var from = $('[name="collection_shipping_address_id"]').val();
     var to = $('[name="delivery_shipping_address_id"]').val();
     $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.user_token}&order=${order}&to=${to}&from=${from}`).done(function(response){
-      if(response.hasOwnProperty('waybill_id')){
-        //alert(response.waybill_id);
-      }
     })
     })
     {% if not waybill_id %}
