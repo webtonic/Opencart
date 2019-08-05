@@ -2,7 +2,7 @@
 <modification>
     <name>Collivery.net Extension v3.0.3.x</name>
     <code>mds</code>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <author>MDS Tech</author>
     <link>https://collivery.net</link>
     <!-- CONTROLLERS -->
@@ -63,7 +63,7 @@
                 'log' => $this->registry->get('log'),
                 'cache_dir' => DIR_CACHE.'/mds/',
                 'app_name' => 'MDS Collivery.net',
-                'app_version' => '1.0.1',
+                'app_version' => '1.0.3',
                 'app_host' => 'Opencart ' . VERSION,
                 'app_url' => $_SERVER['HTTP_HOST'],
                 'user_email' => $username ,
