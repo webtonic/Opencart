@@ -357,9 +357,8 @@ class Collivery
 
         //No errors, lets try calling a method from our client
         try {
-            $token = array_shift($params);
-
-            return $this->client->{trim($method)}($token, $params);
+            // We cannot use (...$params) as we need to support 5.4
+            return call_user_func_array([$this->client, trim($method)], $params);
         } catch (SoapFault $e) {
             //oops, something went wrong from the client, what is it?
             $this->catchSoapFault($e);
@@ -1179,5 +1178,3 @@ class Log
     }
 
 }
-
-
