@@ -175,13 +175,6 @@
             'collivery_location_type',
         )
     );
-    protected $collivery_files = array(
-        DIR_APPLICATION.'controller/extension/shipping/mds.php',
-        DIR_CATALOG.'model/extension/shipping/mds.php',
-        DIR_LANGUAGE.'en-gb/extension/shipping/mds.php',
-        DIR_SYSTEM.'library/mds/Collivery.php',
-        DIR_TEMPLATE.'extension/shipping/mds.twig',
-    );
                 ]]>
             </add>
         </operation>
@@ -235,7 +228,14 @@
                     }
                 }
             }
-            foreach ($this->collivery_files as $colliveryFile) {
+            $colliveryFiles = [
+                DIR_APPLICATION.'controller/extension/shipping/mds.php',
+                DIR_CATALOG.'model/extension/shipping/mds.php',
+                DIR_LANGUAGE.'en-gb/extension/shipping/mds.php',
+                DIR_SYSTEM.'library/mds/Collivery.php',
+                DIR_TEMPLATE.'extension/shipping/mds.twig',
+            ];
+            foreach ($colliveryFiles as $colliveryFile) {
                 if (file_exists($colliveryFile)) {
                     unlink($colliveryFile);
                 }
