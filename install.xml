@@ -873,26 +873,6 @@
                           </table>
                       </div>
                   </div>
-                    <div class="row">
-                      <div class="col-md-12">
-                          <table class="table table-striped">
-                              <thead>
-                                <tr>
-                                    <td>Status</td>
-                                    <td>Delivery Date</td>
-                                    <td>ETA</td>
-                                </tr>
-                              </thead>
-                              <tbody>
-                              <tr>
-                                  <td></td>
-                                  <td></td>
-                                  <td></td>
-                              </tr>
-                              </tbody>
-                          </table>
-                      </div>
-                  </div>
             `;
 
                 $(document).find('#sub-tab-mds').html(html);
