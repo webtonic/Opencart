@@ -821,8 +821,8 @@
             </search>
             <add position="replace">
                 <![CDATA[
-                const colliveryElements = $(document).find('[name="shipping_collivery_town"], [name="shipping_collivery_suburb"], [name="shipping_collivery_location_type"]');
-                      let errors = [];
+                var colliveryElements = $(document).find('[name="shipping_collivery_town"], [name="shipping_collivery_suburb"], [name="shipping_collivery_location_type"]');
+                      var errors = [];
                       colliveryElements.each(function() {
                             if(!$(this).val()){
                                 alert('Please select Town, Suburb and Location Type');
@@ -1226,7 +1226,7 @@
     .ready(function(){
       (function(fields){
         fields.map(function(item){
-          let select = $(document).find(`select[name="shipping_${item}"]`), option;
+          var select = $(document).find(`select[name="shipping_${item}"]`), option;
           if(item === 'collivery_town'){
             option = select.find("[value='{{ collivery_town }}']");
           }else if(item === 'collivery_suburb'){
