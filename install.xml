@@ -973,6 +973,9 @@
       </div>
       <div class="row">
          <div class="col-md-12">
+          {% if is_mds and waybill_status == 1 %} }}
+            <button class="btn btn-success" id="accept-waybill">Accept Waybill (start shipping)</button>
+          {% else %}
             <table class="table table-striped">
                <thead>
                   <tr>
@@ -989,6 +992,7 @@
                   </tr>
                </tbody>
             </table>
+          {% endif %}
          </div>
       </div>
       {% else %}
@@ -1235,7 +1239,7 @@
     $.getJSON(`index.php?route=sale/order/createCollivery&user_token=${window.user_token}&order=${order}&to=${to}&from=${from}`).done(function(response){
     })
     })
-    {% if not waybill_id %}
+    {% if not (waybill_id or waybill_status == 1) %}
     .on('click', '#accept-waybill', function(a){
         a.preventDefault();
       $('#confirm-accept-price-and-create-waybill').modal('show');
