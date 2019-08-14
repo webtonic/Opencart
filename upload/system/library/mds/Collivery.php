@@ -267,7 +267,7 @@ class Collivery
      *
      * @return mixed
      */
-    public function setCache($key, $value, $ttl = 10080)
+    public function setCache($key, $value, $ttl = 1440)
     {
         $key = $this->getCacheKey($key);
 
