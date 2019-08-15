@@ -130,7 +130,7 @@ class Collivery
             if ($authenticate) {
 
                 if ($this->cacheEnabled) {
-                    $this->setCache($cacheKey, $authenticate);
+                    $this->setCache($cacheKey, $authenticate, 59);
                 }
 
                 $this->default_address_id = $authenticate['default_address_id'];
@@ -267,7 +267,7 @@ class Collivery
      *
      * @return mixed
      */
-    public function setCache($key, $value, $ttl = 10080)
+    public function setCache($key, $value, $ttl = 1440)
     {
         $key = $this->getCacheKey($key);
 
