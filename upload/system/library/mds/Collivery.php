@@ -577,7 +577,7 @@ class Collivery
 
             $addressId = $result['address_id'];
             if (isset($result['contact_id'])) {
-                list('contact_id' => $contactId) = current($this->getContacts($addressId));
+                $contactId = current($this->getContacts($addressId));
 
                 return $this->errorsOrResponse(['address_id' => $addressId, 'contact_id' => $contactId]);
             }
@@ -746,7 +746,7 @@ class Collivery
             return $this->getErrors();
         }
 
-        list('address' => $address) = $result;
+        $address = current($result);
         if ($this->cacheEnabled) {
             $this->setCache($cacheKey, $address);
         }
@@ -892,7 +892,7 @@ class Collivery
             return $this->errorsOrResponse();
         }
 
-        list('services' => $services) = $result;
+        $services = current($result);
         if ($this->cacheEnabled) {
             $this->setCache($cacheKey, $services);
         }
