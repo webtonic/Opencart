@@ -328,6 +328,30 @@
             </add>
         </operation>
     </file>
+
+    <file path="catalog/view/theme/*/template/checkout/register.twig">
+        <operation>
+            <search index="7"><![CDATA[
+                <div class="form-group required">
+            ]]></search>
+            <add position="replace"><![CDATA[
+                <div class="form-group" style="display: none;">
+            ]]></add>
+        </operation>
+    </file>
+
+    <file path="catalog/view/theme/*/template/checkout/guest.twig">
+        <operation>
+            <search index="5"><![CDATA[
+                <div class="form-group required">
+            ]]></search>
+            <add position="replace"><![CDATA[
+                <div class="form-group" style="display: none;">
+            ]]></add>
+        </operation>
+    </file>
+
+
     <file path="admin/controller/sale/order.php">
         <operation>
             <search>
@@ -647,12 +671,12 @@
     </file>
     <file path="catalog/controller/account/address.php">
         <operation>
-        <search>
-            <![CDATA[if ($custom_field['location'] == 'address') {]]>
-        </search>
-        <add position="before">
-            <![CDATA[//if($custom_field['name'] == 'Town' || $custom_field['name'] == 'Suburb' || $custom_field['name'] == 'Location Type')continue;]]>
-        </add>
+            <search>
+                <![CDATA[if ($custom_field['location'] == 'address') {]]>
+            </search>
+            <add position="before">
+                <![CDATA[//if($custom_field['name'] == 'Town' || $custom_field['name'] == 'Suburb' || $custom_field['name'] == 'Location Type')continue;]]>
+            </add>
         </operation>
     </file>
     <file path="catalog/controller/checkout/shipping_address.php">
