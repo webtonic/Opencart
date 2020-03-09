@@ -5,9 +5,12 @@ use Mds\MdsColliveryService;
 
 class ModelExtensionShippingMds extends Model
 {
-    const TEN = '10';
-    const EIGHT = '8';
-    const NINE = '9';
+    // arrange custom fields according to their relevant position
+    // on checkout page -> personal details form
+    // town will always comes before suburb
+    const SORTED_01_TOWN = '8';
+    const SORTED_02_SUBURB = '9';
+    const SORTED_03_LOCATION_TYPE = '10';
 
     private $columns = array(
         'order' => array(
@@ -30,9 +33,9 @@ class ModelExtensionShippingMds extends Model
     );
 
     private $locationFields = array(
-        self::TEN => "Location Type",
-        self::EIGHT => "Town",
-        self::NINE => "Suburb"
+        self::SORTED_01_TOWN => "Town",
+        self::SORTED_02_SUBURB => "Suburb",
+        self::SORTED_03_LOCATION_TYPE => "Location Type",
     );
 
     private $relationship = array(
