@@ -5,6 +5,9 @@ use Mds\MdsColliveryService;
 
 class ModelExtensionShippingMds extends Model
 {
+    const TEN = '10';
+    const EIGHT = '8';
+    const NINE = '9';
 
     private $columns = array(
         'order' => array(
@@ -27,9 +30,9 @@ class ModelExtensionShippingMds extends Model
     );
 
     private $locationFields = array(
-        "10" => "Location Type",
-        "8" => "Town",
-        "9" => "Suburb"
+        self::TEN => "Location Type",
+        self::EIGHT => "Town",
+        self::NINE => "Suburb"
     );
 
     private $relationship = array(
