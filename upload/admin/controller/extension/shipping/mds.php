@@ -191,7 +191,7 @@ class ControllerExtensionShippingMds extends Controller {
     public function install() {
 
         $errors = '';
-        if (PHP_VERSION_ID <= 50400) {
+        if (version_compare(phpversion(), '5.4.0', '<') == true) {
             $errors .= 'MDS Collivery requires PHP 5.4 in order to run. Please upgrade before installing.' . PHP_EOL;
         }
         if (!extension_loaded('soap')) {
@@ -206,10 +206,32 @@ class ControllerExtensionShippingMds extends Controller {
             die($div);
         }
 
-        $this->model_setting_event->installColliveryShippingPlugin();
+        $this->load->model('extension/shipping/mds');
+        $this->model_extension_shipping_mds->addColumns();
+        $this->model_extension_shipping_mds->addCustomFields();
     }
 
     public function uninstall(){
-        $this->model_setting_event->uninstallColliveryShippingPlugin();
+        $this->load->model('extension/shipping/mds');
+        $this->model_extension_shipping_mds->dropColumns();
+        $this->model_extension_shipping_mds->dropCustomFields();
+
+        // $this->deleteAssocFiles(); NEEED WORK
+    }
+
+    private function deleteAssocFiles()
+    {
+        $files = [
+            DIR_APPLICATION.'controller/extension/shipping/mds.php',
+            DIR_CATALOG.'model/extension/shipping/mds.php',
+            DIR_LANGUAGE.'en-gb/extension/shipping/mds.php',
+            DIR_SYSTEM.'library/mds/Collivery.php',
+            DIR_TEMPLATE.'extension/shipping/mds.twig',
+        ];
+        foreach ($files as $file) {
+            if (file_exists($file)) {
+                unlink($file);
+            }
+        }
     }
 }
