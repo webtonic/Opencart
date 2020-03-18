@@ -30,62 +30,6 @@
         </operation>
 
     </file>
-    <file path="system/engine/controller.php">
-        <operation>
-            <search>
-                <![CDATA[public function __get($key) {]]>
-            </search>
-            <add position="after">
-                <![CDATA[
-        /** @collivery-config */
-        if(!$this->registry->has('collivery')){
-            $query = $this->registry->get('db')->query("SELECT
-                   p.value AS '0',
-                   u.value AS '1',
-                   d.value AS '2'
-            FROM `".DB_PREFIX."setting` AS p
-            LEFT JOIN `".DB_PREFIX."setting` AS u on(u.`code` = p.`code`)
-            LEFT JOIN `".DB_PREFIX."setting` AS d on(d.`code` = p.`code`)
-            WHERE p.`code`='shipping_mds'
-              AND u.`code`='shipping_mds'
-              AND d.`code`='shipping_mds'
-              AND p.`key`='shipping_mds_password'
-              AND u.`key`='shipping_mds_username'
-              AND d.`key`='shipping_mds_is_demo'");
-            if (!$query->num_rows) {
-                $is_demo = true;
-                $username = '';
-                $password = '';
-            } else {
-                list($password, $username, $is_demo) = $query->row;
-            }
-            $config = array(
-                'log' => $this->registry->get('log'),
-                'cache_dir' => DIR_CACHE.'/mds/',
-                'app_name' => 'MDS Collivery.net',
-                'app_version' => '1.0.4',
-                'app_host' => 'Opencart ' . VERSION,
-                'app_url' => $_SERVER['HTTP_HOST'],
-                'user_email' => $username ,
-                'user_password' => $password,
-                'demo' =>  $is_demo
-            );
-
-            $collivery_library = DIR_SYSTEM . 'library/mds/Collivery.php';
-            if(is_file($collivery_library)){
-                include_once $collivery_library;
-                $this->registry->set('collivery', new \Mds\Collivery($config));
-                $collivery = $this->registry->get('collivery');
-                if($collivery->authenticate() &&  $collivery->isAuthError()){
-                    $this->registry->set('error', array('warning' => 'Collivery.net Shipping Plugin Auth Error'));
-                }
-            }
-        }
-        /** @endcollivery-config */
-                ]]>
-            </add>
-        </operation>
-    </file>
     <file path="catalog/model/checkout/order.php">
         <operation>
             <search>
