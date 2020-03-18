@@ -15,10 +15,19 @@
  * @property \Config                    $config
  * @property \Log                       $log
  * @property \Cart\User                 $user
- * @property \Mds\Collivery             $collivery
+ * @property  Collivery $Collivery
  */
 class ControllerExtensionShippingMds extends Controller {
     private $error = array();
+
+    public function __construct($registry)
+    {
+        parent::__construct($registry);
+
+        if (!$this->registry->has('Collivery')) {
+            $this->registry->set('Collivery', new Collivery($this->registry));
+        }
+    }
 
     public function index() {
         $this->load->language('extension/shipping/mds');
@@ -33,7 +42,7 @@ class ControllerExtensionShippingMds extends Controller {
         }
 
         $data = $this->language->all();
-        $services = $this->collivery->getServices();
+        $services = $this->Collivery->services();
         $data['services'] = $services;
 
         foreach ($services as $key => $service) {
@@ -54,7 +63,7 @@ class ControllerExtensionShippingMds extends Controller {
         }
         if (isset($this->error['warning'])) {
             $data['error_warning'] = $this->error['warning'];
-        }elseif($this->collivery->authenticate() && $this->collivery->isAuthError()){
+        }elseif($this->Collivery->isAuthError()){
             $data['error_warning'] = 'Incorrect Username Or Password For Collivery.net Plugin';
         } else {
             $data['error_warning'] = '';
