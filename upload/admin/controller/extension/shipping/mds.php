@@ -35,7 +35,7 @@ class ControllerExtensionShippingMds extends Controller {
         $this->load->model('setting/setting');
         $this->document->setTitle($this->language->get('heading_title'));
 
-        if (strtoupper($this->request->server['REQUEST_METHOD']) === 'POST') {
+        if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
             $this->model_setting_setting->editSetting('shipping_mds', $this->request->post);
             $this->session->data['success'] = $this->language->get('text_success');
             $this->response->redirect($this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], 'SSL'));
@@ -178,7 +178,7 @@ class ControllerExtensionShippingMds extends Controller {
         $this->response->setOutput($this->load->view('extension/shipping/mds', $data));
     }
     protected function validate() {
-        if (!$this->user->hasPermission('modify', 'shipping/mds')) {
+        if (!$this->user->hasPermission('modify', 'extension/shipping/mds')) {
             $this->error['warning'] = $this->language->get('error_permission');
         }
         if (!$this->request->post['shipping_mds_username']) {
