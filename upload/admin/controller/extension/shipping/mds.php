@@ -10,9 +10,9 @@
  * @property \Request                   $request
  * @property \Session                   $session
  * @property \Response                  $response
- * @property \Language                  $language
+ * @property Language $language
  * @property \Url                       $url
- * @property \Config                    $config
+ * @property Config $config
  * @property \Log                       $log
  * @property \Cart\User                 $user
  * @property  Collivery $Collivery
@@ -27,6 +27,19 @@ class ControllerExtensionShippingMds extends Controller {
         if (!$this->registry->has('Collivery')) {
             $this->registry->set('Collivery', new Collivery($this->registry));
         }
+
+        if (!$this->registry->has('mds_setting')) {
+            $this->registry->set('mds_setting', new Config());
+        }
+
+        $this->load->model('setting/setting');
+
+        // retrieve mds setting from database to config
+        // for easy access later
+        foreach ($this->model_setting_setting->getSetting('shipping_mds') as $key => $value) {
+            $this->mds_setting->set($key, $value);
+        }
+
     }
 
     public function index() {
@@ -35,7 +48,7 @@ class ControllerExtensionShippingMds extends Controller {
         $this->load->model('setting/setting');
         $this->document->setTitle($this->language->get('heading_title'));
 
-        if (strtoupper($this->request->server['REQUEST_METHOD']) === 'POST') {
+        if (($this->request->server['REQUEST_METHOD'] == 'POST') && $this->validate()) {
             $this->model_setting_setting->editSetting('shipping_mds', $this->request->post);
             $this->session->data['success'] = $this->language->get('text_success');
             $this->response->redirect($this->url->link('marketplace/extension', 'user_token=' . $this->session->data['user_token'], 'SSL'));
@@ -107,61 +120,19 @@ class ControllerExtensionShippingMds extends Controller {
         $data['action'] = $this->url->link('extension/shipping/mds', 'user_token='.$this->session->data['user_token'], 'SSL');
         $data['cancel'] = $this->url->link('extension/shipping', 'user_token='.$this->session->data['user_token'], 'SSL');
 
-        if (isset($this->request->post['shipping_mds_username'])) {
-            $data['shipping_mds_username'] = $this->request->post['shipping_mds_username'];
-        } else {
-            $data['shipping_mds_username'] = $this->config->get('shipping_mds_username');
-        }
-        if (isset($this->request->post['shipping_mds_password'])) {
-            $data['shipping_mds_password'] = $this->request->post['shipping_mds_password'];
-        } else {
-            $data['shipping_mds_password'] = $this->config->get('shipping_mds_password');
-        }
-        if (isset($this->request->post['shipping_mds_markup'])) {
-            $data['shipping_mds_markup'] = $this->request->post['shipping_mds_markup'];
-        } else {
-            $data['shipping_mds_markup'] = $this->config->get('shipping_mds_markup');
-        }
-        if (isset($this->request->post['shipping_mds_test'])) {
-            $data['shipping_mds_test'] = $this->request->post['shipping_mds_test'];
-        } else {
-            $data['shipping_mds_test'] = $this->config->get('shipping_mds_test');
-        }
-        if (isset($this->request->post['shipping_mds_insurance'])) {
-            $data['shipping_mds_insurance'] = $this->request->post['shipping_mds_insurance'];
-        } else {
-            $data['shipping_mds_insurance'] = $this->config->get('shipping_mds_insurance');
-        }
-        if (isset($this->request->post['shipping_mds_status'])) {
-            $data['shipping_mds_status'] = $this->request->post['shipping_mds_status'];
-        } else {
-            $data['shipping_mds_status'] = $this->config->get('shipping_mds_status');
-        }
 
-        if (isset($this->request->post['shipping_mds_is_demo'])) {
-            $data['shipping_mds_is_demo'] = $this->request->post['shipping_mds_is_demo'];
-        } else {
-            $data['shipping_mds_is_demo'] = $this->config->get('shipping_mds_is_demo');
-        }
-        if (isset($this->request->post['shipping_mds_tax_class_id'])) {
-            $data['shipping_mds_tax_class_id'] = $this->request->post['shipping_mds_tax_class_id'];
-        } else {
-            $data['shipping_mds_tax_class_id'] = $this->config->get('shipping_mds_tax_class_id');
-        }
+        $data['shipping_mds_username'] = $this->getSettingValue('shipping_mds_username', $this->Collivery->getClientDefaultName());
+        $data['shipping_mds_password'] = $this->getSettingValue('shipping_mds_password', $this->Collivery->getClientDefaultPassword());
+        $data['shipping_mds_markup'] = $this->getSettingValue('shipping_mds_markup');
+        $data['shipping_mds_test'] = $this->getSettingValue('shipping_mds_test');
+        $data['shipping_mds_insurance'] = $this->getSettingValue('shipping_mds_insurance');
+        $data['shipping_mds_status'] = $this->getSettingValue('shipping_mds_status');
+        $data['shipping_mds_is_demo'] = $this->Collivery->isSandBoxAcc();
+        $data['shipping_mds_tax_class_id'] = $this->getSettingValue('shipping_mds_tax_class_id');
 
         $this->load->model('localisation/tax_class');
         $data['tax_classes'] = $this->model_localisation_tax_class->getTaxClasses();
 
-        if (isset($this->request->post['shipping_mds_geo_zone_id'])) {
-            $data['shipping_mds_geo_zone_id'] = $this->request->post['shipping_mds_geo_zone_id'];
-        } else {
-            $data['shipping_mds_geo_zone_id'] = $this->config->get('shipping_mds_geo_zone_id');
-        }
-        if (isset($this->request->post['shipping_mds_geo_zone_id'])) {
-            $data['shipping_mds_geo_zone_id'] = $this->request->post['shipping_mds_geo_zone_id'];
-        } else {
-            $data['shipping_mds_geo_zone_id'] = $this->config->get('shipping_mds_geo_zone_id');
-        }
 
         $data['shipping_mds_is_auto_create_waybill'] = $this->config->get('shipping_mds_is_auto_create_waybill');
         $data['shipping_mds_is_auto_create_address'] = $this->config->get('shipping_mds_is_auto_create_address');
@@ -178,7 +149,7 @@ class ControllerExtensionShippingMds extends Controller {
         $this->response->setOutput($this->load->view('extension/shipping/mds', $data));
     }
     protected function validate() {
-        if (!$this->user->hasPermission('modify', 'shipping/mds')) {
+        if (!$this->user->hasPermission('modify', 'extension/shipping/mds')) {
             $this->error['warning'] = $this->language->get('error_permission');
         }
         if (!$this->request->post['shipping_mds_username']) {
@@ -196,6 +167,18 @@ class ControllerExtensionShippingMds extends Controller {
         }
         return !$this->error;
     }
+
+    protected function getSettingValue($key, $default = null) {
+
+        if (isset($this->request->post[$key])) {
+            return $this->request->post[$key];
+        }
+        if ($this->mds_setting->has($key)) {
+            return $this->mds_setting->get($key);
+        }
+        return $default;
+    }
+
 
     public function install() {
 
