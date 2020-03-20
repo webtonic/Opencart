@@ -16,14 +16,16 @@ class Collivery
     const ENDPOINT_DEFAULT_ADDRESS = 'default_address';
     const ENDPOINT_SERVICE_TYPES = 'service_types';
 
-    private $userName = null;
-
     private $registry;
     private $config;
+    private $request;
 
     private $attempts = 0;
+    private $isSandBocAcc = true;
 
-    private $isAuthError = true;
+    private $isAuthError = false;
+
+    private $defaultAddressId = null;
 
 
     /**
@@ -34,9 +36,8 @@ class Collivery
     {
         $this->registry = $registry;
         $this->config = $registry->get('config');
-
-        $this->setToken();
-
+        $this->request = $registry->get('request');
+        $this->refreshToken();
     }
 
     /** get instance of MdsHttpRequest
@@ -114,27 +115,32 @@ class Collivery
     /**
      * set authentication token
      */
-    private function setToken()
+    private function refreshToken()
     {
-        if ($data = $this->attempt()) {
-            $this->accessToken = $data->api_token;
-            $this->userName = $data->email_address;
+        $client_login = $this->filterUserCredential();
+        $data = $this->sendRequest('post', self::ENDPOINT_LOGIN, $client_login);
+        if (isset($data->data)) {
+            $this->accessToken = $data->data->api_token;
+            $this->isSandBocAcc = $client_login['email'] === self::SANDBOX_USERNAME;
+        } else {
             $this->isAuthError = false;
         }
+
     }
 
     /**
-     * attempt to retrieve user access token
-     * https://collivery.net/integration/api/v3/authentication
-     * @return object|null
+     * filter user credential
+     * @return array
      */
-    private function attempt()
+    private function filterUserCredential()
     {
-        if ($data = $this->sendRequest('post', self::ENDPOINT_LOGIN, $this->UserCredential())) {
-            if ($d = $data->data) {
-                return $d;
-            }
+        $email = trim($this->config->get('shipping_mds_username'));
+
+        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['email' => $email,'password' => $this->config->get('shipping_mds_password')];
         }
+
+        return  ['email' => self::SANDBOX_USERNAME,'password' => self::SANDBOX_PASSWORD];
     }
 
     /**
@@ -146,46 +152,20 @@ class Collivery
         return $this->isAuthError;
     }
 
-    /**
-     * get user api login credential
-     * @return array
-     */
-    private function UserCredential()
+    private function hasResults($data)
     {
-        $userName = self::SANDBOX_USERNAME;
-        $password = self::SANDBOX_PASSWORD;
-        if ($n =$this->getVal('shipping_mds_username')) {
-            $userName = $n;
-        }
-
-        if ($p = $this->getVal('shipping_mds_password')) {
-            $password = $p;
-        }
-
-        return ['email' => $userName, 'password' => $password];
-    }
-
-    /**
-     * @param $val
-     * @return string|null
-     */
-    private function getVal($val)
-    {
-        if ($this->config->has($val)) {
-            return trim($this->config->get($val));
-        }
-
+        return isset($data->data) && count($data->data);
     }
 
     /**
      * get service-types form api
-     * https://collivery.net/integration/api/v3/#11-service-types
      * @return array
      */
     public function services()
     {
         $result = [];
-        if ($data = $this->fetch(self::ENDPOINT_SERVICE_TYPES)) {
+        $data = $this->fetch(self::ENDPOINT_SERVICE_TYPES);
+        if ($this->hasResults($data)) {
             foreach ($data->data as $index => $service) {
                 $result[$service->id] = $service->text;
             }
@@ -195,10 +175,22 @@ class Collivery
 
     /**
      * get default_address form api
-     * https://collivery.net/integration/api/v3/#2-addresses
      * @return string
      */
     public function defaultAddress()
+    {
+        $data = $this->fetch(self::ENDPOINT_DEFAULT_ADDRESS);
+        if ($this->hasResults($data)) {
+            $this->defaultAddressId = $data->data->id;
+            return $data->data;
+        }
+    }
+
+    /**
+     * get default_address form api
+     * @return string
+     */
+    public function defaultAddressId()
     {
         $result = '';
         if ($data = $this->fetch(self::ENDPOINT_DEFAULT_ADDRESS)) {
@@ -207,14 +199,44 @@ class Collivery
         return $result;
     }
 
-    public function getuserName()
+    /** get client username
+     * @return string
+     */
+    public function getClientDefaultName()
     {
-        return $this->userName;
+        return self::SANDBOX_USERNAME;
+    }
+
+    /** get client default password
+     * @return string
+     */
+    public function getClientDefaultPassword()
+    {
+        return self::SANDBOX_PASSWORD;
+    }
+
+    /** Determine client is using testing account
+     * @return string
+     */
+    public function isSandBoxAcc()
+    {
+        return $this->isSandBocAcc;
+    }
+
+    /** get default address
+     * @return int|null
+     */
+    public function getdefaultAddress()
+    {
+        if ($this->defaultAddressId === null) {
+            $this->defaultAddress();
+        }
+
+        return $this->defaultAddressId;
     }
 
 
-
-
 }
+
 
 require_once(dirname(__FILE__) . '/mds/MdsHttpRequest.php');
