@@ -15,6 +15,9 @@ class Collivery
     const ENDPOINT_LOGIN = 'login';
     const ENDPOINT_DEFAULT_ADDRESS = 'default_address';
     const ENDPOINT_SERVICE_TYPES = 'service_types';
+    const ENDPOINT_TOWNS = 'towns';
+    const ENDPOINT_SUBURBS = 'towns';
+    const ENDPOINT_LOCATION_TYPES = 'location_types';
 
     private $userName = null;
 
@@ -175,6 +178,54 @@ class Collivery
             return trim($this->config->get($val));
         }
 
+    }
+
+    /**
+     * get towns
+     * @return array
+     */
+    public function towns()
+    {
+        $result = [];
+        $data = $this->fetch(self::ENDPOINT_TOWNS);
+        if ($this->hasResults($data)) {
+            foreach ($data->data as $index => $town) {
+                $result[$town->id] = $town->name;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * get location types
+     * @return array
+     */
+    public function locationTypes()
+    {
+        $result = [];
+        $data = $this->fetch(self::ENDPOINT_LOCATION_TYPES);
+        if ($this->hasResults($data)) {
+            foreach ($data->data as $index => $locationType) {
+                $result[$locationType->id] = $locationType->name;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * get suburbs
+     * @return array
+     */
+    public function suburbs()
+    {
+        $result = [];
+        $data = $this->fetch(self::ENDPOINT_SUBURBS);
+        if ($this->hasResults($data)) {
+            foreach ($data->data as $index => $suburb) {
+                $result[$suburb->id] = $suburb->name;
+            }
+        }
+        return $result;
     }
 
     /**
