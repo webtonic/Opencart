@@ -46,6 +46,36 @@ class ModelExtensionShippingMds extends Model
         'custom_field'
     );
 
+    private $events = array(
+        'catalog/model/common/account/custom_field/getCustomFields/after' => array(
+            'extension/shipping/mdsShipping/populate_custom_columns',
+        ),
+    );
+
+    public function addEvents() {
+        $this->createEvents();
+    }
+
+    public function removeEvents() {
+        $this->deleteEvents();
+    }
+
+    public function deleteEvents() {
+        $this->load->model('setting/event');
+        $this->model_setting_event->deleteEventByCode('shipping_mds');
+    }
+
+    public function createEvents() {
+        $this->load->model('setting/event');
+
+        foreach ($this->events as $trigger => $actions) {
+            foreach ($actions as $action) {
+                $this->model_setting_event->addEvent('shipping_mds', $trigger, $action, 1, 0);
+            }
+        }
+    }
+
+
     public function addColumns() {
         foreach ($this->columns as $table => $columns) {
             foreach ($columns as $column) {

@@ -209,12 +209,14 @@ class ControllerExtensionShippingMds extends Controller {
         $this->load->model('extension/shipping/mds');
         $this->model_extension_shipping_mds->addColumns();
         $this->model_extension_shipping_mds->addCustomFields();
+        $this->model_extension_shipping_mds->addEvents();
     }
 
     public function uninstall(){
         $this->load->model('extension/shipping/mds');
         $this->model_extension_shipping_mds->dropColumns();
         $this->model_extension_shipping_mds->dropCustomFields();
+        $this->model_extension_shipping_mds->removeEvents();
 
         // $this->deleteAssocFiles(); NEEED WORK
     }
