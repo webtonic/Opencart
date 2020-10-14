@@ -154,11 +154,15 @@ class ControllerExtensionShippingMds extends Controller {
             $data['shipping_mds_geo_zone_id'] = $this->config->get('shipping_mds_geo_zone_id');
         }
 
-        $data['shipping_mds_is_auto_create_waybill'] = $this->config->get('shipping_mds_is_auto_create_waybill');
-        $data['shipping_mds_is_auto_create_address'] = $this->config->get('shipping_mds_is_auto_create_address');
+        $data['shipping_mds_is_auto_create_waybill'] = $this->config->get('shipping_mds_auto_create_waybill');
+        $data['shipping_mds_is_auto_create_address'] = $this->config->get('shipping_mds_auto_create_address');
+        $data['shipping_mds_is_auto_accept_waybill'] = $this->config->get('shipping_mds_auto_accept_waybill');
+
 
         $data['default_collivery_from_addresses'] = array();
         $data['default_address_id'] = $this->collivery->getDefaultAddressId();
+        $data['collivery_collection_address'] = $this->collivery->getAddress($data['default_address_id']);
+        array_push($data['default_collivery_from_addresses'], $data['collivery_collection_address'] );
         $data['user_token'] = $this->request->get['user_token'];
 
         $this->load->model('localisation/geo_zone');
