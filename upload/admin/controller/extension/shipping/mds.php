@@ -157,7 +157,8 @@ class ControllerExtensionShippingMds extends Controller {
         $data['shipping_mds_is_auto_create_waybill'] = $this->config->get('shipping_mds_is_auto_create_waybill');
         $data['shipping_mds_is_auto_create_address'] = $this->config->get('shipping_mds_is_auto_create_address');
 
-        $data['default_collivery_from_addresses'] = array();
+
+        $data['default_collivery_from_addresses'] = $this->collivery->getAddresses(array());
         $data['default_address_id'] = $this->collivery->getDefaultAddressId();
         $data['user_token'] = $this->request->get['user_token'];
 
