@@ -415,7 +415,7 @@ class Collivery
      *
      * @return array|mixed|null
      */
-    private function getAddresses(array $filter = [])
+    public function getAddresses(array $filter = [])
     {
         $cacheKey = 'addresses.' . $this->client_id;
         $addresses = $this->getCache($cacheKey);
