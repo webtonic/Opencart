@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <modification>
-    <name>Collivery.net Extension v3.0.3.x</name>
+    <name>Collivery.net Extension For Opencart v3.0.3.x</name>
     <code>mds</code>
-    <version>1.0.4</version>
+    <version>1.0.5</version>
     <author>MDS Tech</author>
     <link>https://collivery.net</link>
     <!-- CONTROLLERS -->
